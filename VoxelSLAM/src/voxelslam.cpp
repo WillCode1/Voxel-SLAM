@@ -243,9 +243,9 @@ public:
     }
 
     printf("mn: %lf %lf %lf\n", eigvalue[0], eigvalue[1], eigvalue[2]);
-    Eigen::Vector3d angv(vec_imus[0][0]->angular_velocity.x, vec_imus[0][0]->angular_velocity.y, vec_imus[0][0]->angular_velocity.z);
-    Eigen::Vector3d acc(vec_imus[0][0]->linear_acceleration.x, vec_imus[0][0]->linear_acceleration.y, vec_imus[0][0]->linear_acceleration.z);
-    acc *= 9.8;
+    // Eigen::Vector3d angv(vec_imus[0][0]->angular_velocity.x, vec_imus[0][0]->angular_velocity.y, vec_imus[0][0]->angular_velocity.z);
+    // Eigen::Vector3d acc(vec_imus[0][0]->linear_acceleration.x, vec_imus[0][0]->linear_acceleration.y, vec_imus[0][0]->linear_acceleration.z);
+    // acc *= 9.8;
 
     pl_origs.clear(); vec_imus.clear(); beg_times.clear();
     double t1 = ros::Time::now().toSec();
