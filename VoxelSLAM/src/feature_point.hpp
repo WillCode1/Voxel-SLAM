@@ -1,7 +1,7 @@
 #ifndef FEATURE_POINT_HPP
 #define FEATURE_POINT_HPP
 
-#include <ros/ros.h>
+// #include <ros/ros.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <livox_ros_driver/CustomMsg.h>
