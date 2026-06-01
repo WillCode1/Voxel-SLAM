@@ -270,6 +270,7 @@ vector<double> gba_eigen_value_array;
 double gba_min_eigen_value;
 double gba_voxel_size;
 
+// The octotree map for global BA
 class OctreeGBA
 {
 public:
