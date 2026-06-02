@@ -293,6 +293,7 @@ public:
     return rr.dot(cov_inv * rr);
   }
 
+  // Apply bias correction, with rollback buffer
   void update_state(const Eigen::Matrix<double, DIM, 1> &dxi)
   {
     dbg_buf = dbg;
@@ -302,6 +303,7 @@ public:
     dba += dxi.block<3, 1>(12, 0);
   }
 
+  // Merge two consecutive preintegrations into one.
   void merge(IMU_PRE &imu2)
   {
     p_bg += v_bg*imu2.dtime + R_delta*(imu2.p_bg-hat(imu2.p_delta)*R_bg);
