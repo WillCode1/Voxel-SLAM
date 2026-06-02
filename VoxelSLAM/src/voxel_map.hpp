@@ -110,15 +110,16 @@ class LidarFactor
 {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  vector<PointCluster> sig_vecs;
-  vector<vector<PointCluster>> plvec_voxels;
-  vector<double> coeffs;
+  vector<PointCluster> sig_vecs;              // Fixed (marginalized) PointCluster per voxel
+  vector<vector<PointCluster>> plvec_voxels;  // Per-voxel, per-frame local PointClusters
+  vector<double> coeffs;                      // Weight coefficient per voxel
   PLV(3) eig_values; PLM(3) eig_vectors; 
-  vector<PointCluster> pcr_adds;
-  int win_size;
+  vector<PointCluster> pcr_adds;              // Total (fixed + window) PointCluster per voxel
+  int win_size;                               // Number of frames in sliding window
 
   LidarFactor(int _w): win_size(_w){}
 
+  // Append one voxel’s constraint data
   void push_voxel(vector<PointCluster> &vec_orig, PointCluster &fix, double coe, Eigen::Vector3d &eig_value, Eigen::Matrix3d &eig_vector, PointCluster &pcr_add)
   {
     plvec_voxels.push_back(vec_orig);
@@ -129,6 +130,7 @@ public:
     pcr_adds.push_back(pcr_add);
   }
 
+  // Accumulate Hessian (6N x 6N), Jacobian, and residual for voxels [head, end). Uses analytic second-order derivatives.
   void acc_evaluate2(const vector<IMUST> &xs, int head, int end, Eigen::MatrixXd &Hess, Eigen::VectorXd &JacT, double &residual)
   {
     Hess.setZero(); JacT.setZero(); residual = 0;
@@ -240,6 +242,7 @@ public:
     
   }
 
+  // Evaluate residual only (for line-search), also update cached eig_values/eig_vectors.
   void evaluate_only_residual(const vector<IMUST> &xs, int head, int end, double &residual)
   {
     residual = 0;
@@ -293,8 +296,12 @@ public:
 class Lidar_BA_Optimizer
 {
 public:
+  // Window size
+  // = win_size * 6, total Jacobian length
+  // Thread count (default 2)
   int win_size, jac_leng, thd_num = 2;
 
+  // Multi-threaded Hessian/Jacobian accumulation and residual.
   double divide_thread(vector<IMUST> &x_stats, LidarFactor &voxhess, Eigen::MatrixXd &Hess, Eigen::VectorXd &JacT)
   {
     // int thd_num = 4;
@@ -334,6 +341,7 @@ public:
     return residual;
   }
 
+  // Multi-threaded residual evaluation.
   double only_residual(vector<IMUST> &x_stats, LidarFactor &voxhess)
   {
     double residual1 = 0;
@@ -364,6 +372,8 @@ public:
     return residual1;
   }
 
+  // LM iteration: solve (H + uD)dx = -J^T.
+  // First frame is fixed (top 6 rows/cols zeroed). Returns convergence flag.
   bool damping_iter(vector<IMUST> &x_stats, LidarFactor &voxhess, Eigen::MatrixXd* hess, vector<double> &resis, int max_iter = 3, bool is_display = false)
   {
     win_size = voxhess.win_size;
@@ -658,6 +668,7 @@ public:
 class LI_BA_OptimizerGravity
 {
 public:
+  // imu_leng = win_size * DIM + 3
   int win_size, jac_leng, imu_leng;
 
   void hess_plus(Eigen::MatrixXd &Hess, Eigen::VectorXd &JacT, Eigen::MatrixXd &hs, Eigen::VectorXd &js)
@@ -870,14 +881,15 @@ struct Keyframe
   IMUST x0;
   pcl::PointCloud<PointType>::Ptr plptr;
   int exist;
-  int id, mp;
-  float jour;
+  int id, mp;   // Keyframe ID, Map index
+  float jour;   // odometry distance
 
   Keyframe(IMUST &_x0): x0(_x0), exist(0)
   {
     plptr.reset(new pcl::PointCloud<PointType>());
   }
 
+  // Transform stored points by rot/tra and append to pl_send.
   void generate(pcl::PointCloud<PointType> &pl_send, Eigen::Matrix3d rot = Eigen::Matrix3d::Identity(), Eigen::Vector3d tra = Eigen::Vector3d(0, 0, 0))
   {
     Eigen::Vector3d v3;
@@ -931,31 +943,64 @@ public:
 
 // The octotree map for odometry and local mapping
 // You can re-write it in your own project
+/*
+Lifecycle diagram:
+
+  New points arrive
+       |
+       v
+  allocate() ---> push() to SlideWindow
+       |
+  [After all points inserted]
+       |
+       v
+  recut() ---> Plane test via eigenvalue
+       |           |
+       |     [is_plane=true]  --> Keep as leaf, plane_update()
+       |           |
+       |     [is_plane=false] --> Subdivide into 8 children
+       |
+  [Optimization]
+       |
+       v
+  tras_opt() --> Collect LidarFactor entries from planar leaves
+       |
+       v
+  BA solve (Lidar_BA / LI_BA / LI_BA_Gravity)
+       |
+       v
+  margi() --> Fold oldest frame(s) into pcr_fix, clear from SlideWindow
+       |
+  [EKF update]
+       |
+       v
+  match() --> Point-to-plane matching with probabilistic gating
+ */
 int* mp;
 class OctoTree
 {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  SlideWindow* sw = nullptr;
-  PointCluster pcr_add;
-  Eigen::Matrix<double, 9, 9> cov_add;
+  SlideWindow* sw = nullptr;            // Per-frame point storage (nullptr when subdivided)
+  PointCluster pcr_add;                 // Total statistics: fixed + windowed
+  Eigen::Matrix<double, 9, 9> cov_add;  // Accumulated measurement covariance (for plane_var)
 
-  PointCluster pcr_fix;
-  PVec point_fix;
+  PointCluster pcr_fix;           // Marginalized (fixed) statistics
+  PVec point_fix;                 // Fixed points with covariance (for subdivision)
 
-  int layer, octo_state, wdsize;
+  int layer, octo_state, wdsize;  // 0 = root; 0 = leaf, 1 = subdivided; Window size
   OctoTree* leaves[8];
-  double voxel_center[3];
+  double voxel_center[3];         // Octant center xyz
   double jour = 0;
-  float quater_length;
+  float quater_length;            // Half-size of child voxel
 
-  Plane plane;
-  bool isexist = false;
+  Plane plane;                    // Fitted plane (valid when is_plane=true)
+  bool isexist = false;           // Has active (non-marginalized) data
 
   Eigen::Vector3d eig_value;
   Eigen::Matrix3d eig_vector;
 
-  int last_num = 0, opt_state = -1;
+  int last_num = 0, opt_state = -1; // Index into LidarFactor arrays (-1 = not in opt)
   mutex mVox;
 
   OctoTree(int _l, int _w) : layer(_l), wdsize(_w), octo_state(0)
@@ -966,6 +1011,7 @@ public:
     // ins = 255.0*rand()/(RAND_MAX + 1.0f);
   }
 
+  // add point to SlideWindow, accumulate pcr_add and cov_add.
   inline void push(int ord, const pointVar &pv, const Eigen::Vector3d &pw, vector<SlideWindow*> &sws)
   {
     mVox.lock();
@@ -993,6 +1039,7 @@ public:
     mVox.unlock();
   }
 
+  // Add a marginalized point (both pcr_fix and pcr_add).
   inline void push_fix(pointVar &pv)
   {
     if(layer < max_layer)
@@ -1018,6 +1065,7 @@ public:
     return (eig_values[0] < min_eigen_value && (eig_values[0]/eig_values[2])<plane_eigen_value_thre[layer]);
   }
 
+  // Route point to correct child if subdivided, else push.
   void allocate(int ord, const pointVar &pv, const Eigen::Vector3d &pw, vector<SlideWindow*> &sws)
   {
     if(octo_state == 0)
@@ -1115,6 +1163,7 @@ public:
     }
   }
 
+  // Recompute plane normal/center/plane_var from pcr_add using eigendecomposition Jacobians.
   void plane_update()
   {
     plane.center = pcr_add.v / pcr_add.N;
@@ -1145,6 +1194,7 @@ public:
     plane.radius = eig_value[2];
   }
 
+  // Subdivision decision: compute eigenvalues, if planar keep as leaf; otherwise subdivide into 8 children, redistribute points.
   void recut(int win_count, vector<IMUST> &x_buf, vector<SlideWindow*> &sws)
   {
     if(octo_state == 0)
@@ -1193,6 +1243,8 @@ public:
 
   }
 
+  // Marginalization: merge oldest frames into pcr_fix, update pcr_add.
+  // If pcr_fix saturated (>max_points), stop accumulating raw points.
   void margi(int win_count, int mgsize, vector<IMUST> &x_buf, const LidarFactor &vox_opt)
   {
     if(octo_state == 0 && layer>=0)
@@ -1304,7 +1356,7 @@ public:
 
   }
 
-  // Extract the LiDAR factor
+  // Extract the LiDAR factor: for planar leaves with good conditioning (lambda0/lambda1 < 0.12), add to LidarFactor.
   void tras_opt(LidarFactor &vox_opt)
   {
     if(octo_state == 0)
@@ -1332,6 +1384,7 @@ public:
 
   }
 
+  // EKF matching: find plane at world point, compute point-to-plane distance with probabilistic gating (3-sigma).
   int match(Eigen::Vector3d &wld, Plane* &pla, double &max_prob, Eigen::Matrix3d &var_wld, double &sigma_d, OctoTree* &oc)
   {
     int flag = 0;
@@ -1391,6 +1444,7 @@ public:
     return flag;
   }
 
+  // Traverse and collect all descendant pointers for memory management.
   void tras_ptr(vector<OctoTree*> &octos_release)
   {
     if(octo_state == 1)
