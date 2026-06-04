@@ -209,7 +209,8 @@ void pvec_update(PVecPtr pptr, IMUST &x_curr, PLV(3) &pwld)
   for(pointVar &pv: *pptr)
   {
     Eigen::Matrix3d phat = hat(pv.pnt);
-    pv.var = x_curr.R * pv.var * x_curr.R.transpose() + phat * rot_var * phat.transpose() + tsl_var;
+    // pv.var = x_curr.R * pv.var * x_curr.R.transpose() + phat * rot_var * phat.transpose() + tsl_var;
+    pv.var = x_curr.R * pv.var * x_curr.R.transpose() + x_curr.R * phat * rot_var * phat.transpose() * x_curr.R.transpose() + tsl_var;
     pwld.push_back(x_curr.R * pv.pnt + x_curr.p);
   }
 }

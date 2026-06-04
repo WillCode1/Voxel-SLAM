@@ -436,7 +436,8 @@ public:
       {
         pointVar &pv = pptr->at(i);
         Eigen::Matrix3d phat = hat(pv.pnt);
-        Eigen::Matrix3d var_world = x_curr.R * pv.var * x_curr.R.transpose() + phat * rot_var * phat.transpose() + tsl_var;
+        // Eigen::Matrix3d var_world = x_curr.R * pv.var * x_curr.R.transpose() + phat * rot_var * phat.transpose() + tsl_var;
+        Eigen::Matrix3d var_world = x_curr.R * pv.var * x_curr.R.transpose() + x_curr.R * phat * rot_var * phat.transpose() * x_curr.R.transpose() + tsl_var;
         Eigen::Vector3d wld = x_curr.R * pv.pnt + x_curr.p;
 
         double sigma_d = 0;
