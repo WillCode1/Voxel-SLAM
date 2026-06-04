@@ -161,6 +161,7 @@ bool sync_packages(pcl::PointCloud<PointType>::Ptr &pl_ptr, deque<sensor_msgs::I
 }
 
 double dept_err, beam_err;
+// Corresponding formula(1) in voxel_map
 void calcBodyVar(Eigen::Vector3d &pb, const float range_inc, const float degree_inc, Eigen::Matrix3d &var) 
 {
   if (pb[2] == 0)

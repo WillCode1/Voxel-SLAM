@@ -1616,7 +1616,7 @@ void cut_voxel_multi(unordered_map<VOXEL_LOC, OctoTree*> &feat_map, PVecPtr pvec
     if(iter != feat_map.end())
     {
       iter->second->isexist = true;
-      if(feat_tem_map.find(position) == feat_map.end())
+      if(feat_tem_map.find(position) == feat_tem_map.end())
         feat_tem_map[position] = iter->second;
       ot = iter->second;
     }

@@ -500,6 +500,7 @@ public:
       if(EKF_stop_flg) break;
     }
 
+    // Degeneration detection: eigenvalue threshold = 14
     Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> saes(nnt);
     Eigen::Vector3d evalue = saes.eigenvalues();
     // printf("eva %d: %lf\n", match_num, evalue[0]);

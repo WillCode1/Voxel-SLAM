@@ -19,7 +19,7 @@ struct ScanPose
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   IMUST x;
   PVecPtr pvec;
-  Eigen::Matrix<double, 6, 1> v6;
+  Eigen::Matrix<double, 6, 1> v6;   // 6-DOF correction vector
 
   ScanPose(IMUST &_x, PVecPtr _pvec): x(_x), pvec(_pvec)
   {
@@ -276,8 +276,8 @@ class OctreeGBA
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   vector<PLV(3)> locals, worlds;
-  PointCluster pcr_add;
-  int layer, octo_state, wdsize;
+  PointCluster pcr_add;           // Accumulated statistics
+  int layer, octo_state, wdsize;  // Octree depth; 0=leaf, 1=subdivided; Number of frames
   OctreeGBA* leaves[8];
   double voxel_center[3];
   float quater_length;
@@ -321,6 +321,7 @@ public:
     pcr_add.push(world);
   }
 
+  // Redistribute all points to 8 children (reuses memory from oct_buf).
   void subdivide(vector<OctreeGBA*> &oct_buf)
   {
     for(int i=0; i<wdsize; i++)
@@ -356,6 +357,7 @@ public:
     }
   }
 
+  // Eigenvalue test: if plane and well-conditioned, add to LidarFactor; else subdivide.
   void recut(LidarFactor &vox_opt, vector<OctreeGBA*> &oct_buf)
   {
     if(pcr_add.N <= 10)
@@ -405,6 +407,7 @@ public:
 
   }
 
+  // Collect descendant pointers for memory reuse.
   void tras_ptr(vector<OctreeGBA*> &oct_buf)
   {
     if(octo_state == 1)
@@ -444,6 +447,7 @@ public:
   //       delete leaves[i];
   // }
 
+  // Static: insert a point cloud into the hash map, creating OctreeGBA nodes as needed.
   static void cut_voxel(unordered_map<VOXEL_LOC, OctreeGBA*> &feat_map, IMUST &xc, pcl::PointCloud<PointType>::Ptr plptr, int win_count, int wdsize)
   {
     for(PointType &ap: plptr->points)

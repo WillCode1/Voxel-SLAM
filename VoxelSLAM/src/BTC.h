@@ -267,7 +267,7 @@ public:
   // add descriptors to database
   void AddSTDescs(const std::vector<STD> &stds_vec);
 
-  // Geometrical optimization by plane-to-plane ico
+  // Geometrical optimization by plane-to-plane icp
   void PlaneGeomrtricIcp(
       const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &source_cloud,
       const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &target_cloud,
