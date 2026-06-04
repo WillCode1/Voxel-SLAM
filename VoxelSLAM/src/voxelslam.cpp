@@ -1268,7 +1268,7 @@ public:
       }
       
       double t_end = ros::Time::now().toSec();
-      double mem = get_memory();
+      // double mem = get_memory();
       // printf("%d: %.4lf: %.4lf %.4lf %.4lf %.4lf %.4lf %.2lfGb %.1lf\n", win_base+win_count, t_end-t0, t1-t0, t2-t1, t3-t2, t5-t4, t6-t5, mem, jour);
 
       // printf("%d: %lf %lf %lf\n", win_base + win_count, x_curr.p[0], x_curr.p[1], x_curr.p[2]);
