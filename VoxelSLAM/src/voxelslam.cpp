@@ -295,7 +295,7 @@ public:
   int history_kfsize = 0;
   vector<OctoTree*> octos_release;
   int reset_flag = 0;
-  int g_update = 0;
+  int g_update = 0;   // gravity update flag: 0 = not update, 1 = update in motion_init, 2 = update after loop closure
   int thread_num = 5;
   int degrade_bound = 10;
 
@@ -1189,6 +1189,7 @@ public:
         }
       }
 
+      // Local BA: Sliding Window BA Optimization and Marginalization
       if(win_count >= win_size)
       {
         t4 = ros::Time::now().toSec();

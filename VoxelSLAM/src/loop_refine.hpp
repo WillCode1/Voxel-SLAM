@@ -19,7 +19,7 @@ struct ScanPose
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   IMUST x;
   PVecPtr pvec;
-  Eigen::Matrix<double, 6, 1> v6;   // 6-DOF correction vector
+  Eigen::Matrix<double, 6, 1> v6;   // 6-DOF covs
 
   ScanPose(IMUST &_x, PVecPtr _pvec): x(_x), pvec(_pvec)
   {
