@@ -1561,6 +1561,7 @@ public:
 
             bool isPush = false;
             int step = -1;
+            // same session
             if(id == cur_id)
             {
               double span = smp->jour - keyframes->at(search_result.first)->jour;
@@ -1687,6 +1688,7 @@ public:
         PVec pvec_tem;
         int subsize = keyframes->size();
         int init_num = 5;
+        // build corrected local voxel map (map_loop) from recent keyframes
         for(int i=subsize-init_num; i<subsize; i++)
         {
           if(i < 0) continue;
@@ -2154,6 +2156,88 @@ public:
   }
 
 };
+
+/*
++===================================================================+
+|                     SENSOR INPUT                                   |
+|  IMU Topic ----> imu_handler() ----> imu_buf (deque)              |
+|  LiDAR Topic --> pcl_handler() ----> pcl_buf + time_buf (deque)   |
++========================|==========================================+
+                         |
+                         v
++===================================================================+
+|  THREAD 1: thd_odometry_localmapping()                            |
+|                                                                    |
+|  sync_packages() ------> pcl_curr + imus                          |
+|       |                                                            |
+|       v                                                            |
+|  IMUEKF::process()                                                 |
+|    |-- IMU_init() (accumulate gravity)                             |
+|    |-- motion_blur() (forward propagation + de-distortion)         |
+|       |                                                            |
+|       v                                                            |
+|  [Initialization Path]        [Normal Path]                        |
+|  var_init()                   down_sampling_voxel()                |
+|  lio_state_estimation_        var_init()                           |
+|    kdtree()                   lio_state_estimation()               |
+|  motion_init()                  |                                  |
+|    (gravity estimation)         v                                  |
+|       |                   pvec_update() --> pwld                    |
+|       |                   cut_voxel_multi() --> OctoTree           |
+|       |                   multi_recut() --> LidarFactor            |
+|       |                   LI_BA::damping_iter()                    |
+|       |                   multi_margi() --> marginalize            |
+|       |                         |                                  |
+|       +-------------------------+                                  |
+|                                 |                                  |
+|                                 v                                  |
+|              ScanPose ---> buf_lba2loop (mutex protected)          |
+|                                 |                                  |
+|              <-- loop_detect -- | -- dx (correction) <--           |
+|              <-- map_loop ------+                       |          |
++===================================================================+
+                                  |
+          +-----------------------+---------------------+
+          |                                             |
+          v                                             v
++================================+  +===================================+
+| THREAD 2: thd_loop_closure()   |  | THREAD 3: thd_globalmapping()     |
+|                                |  |                                   |
+| Receive ScanPose from          |  | Receive Keyframes from            |
+|   buf_lba2loop                 |  |   multimap_keyframes              |
+|       |                        |  |       |                           |
+|       v                        |  |       v                           |
+| Aggregate win_size scans       |  | Accumulate wdsize keyframes      |
+| Create Keyframe + plbtc        |  |       |                           |
+|       |                        |  |       v                           |
+|       v                        |  | HBA bottom-up:                    |
+| GenerateSTDescs()              |  |   OctreeGBA::cut_voxel()          |
+|   (BTC descriptors)            |  |   OctreeGBA_multi_recut()         |
+|       |                        |  |   Lidar_BA_Optimizer              |
+|       v                        |  |     ::damping_iter()              |
+| SearchLoop() x all sessions    |  |       |                           |
+|       |                        |  |       v                           |
+|       v                        |  | HBA_add_edge()                    |
+| icp_normal()                   |  |   --> gba_edges1 (intra-submap)   |
+|   (ICP refinement)             |  |       |                           |
+|       |                        |  |       v                           |
+|       v                        |  | (when gba_flag==1)                |
+| Drift check + add edge         |  | Top-level BA across submaps      |
+| lp_edges.push()               |  |   --> gba_edges2 (inter-submap)   |
+|       |                        |  |   gba_flag = 0                    |
+|       v                        |  +===================================+
+| GTSAM ISAM2 optimize          |                  |
+|       |                        |                  v
+|       v                        |     topDownProcess():
+| Update all ScanPose poses     |       Add gba_edges1 + gba_edges2
+| Compute dx (correction)       |       ISAM2 optimize
+| Build map_loop                 |       Update all poses
+| loop_detect = 1               |
+|       |                        |
+|       v                        |
+| (at finish) topDownProcess()   |
++================================+
+ */
 
 int main(int argc, char **argv)
 {
