@@ -1190,6 +1190,7 @@ public:
       }
 
       // Local BA: Sliding Window BA Optimization and Marginalization
+      // https://blog.csdn.net/love20102011/article/details/160621052
       if(win_count >= win_size)
       {
         t4 = ros::Time::now().toSec();
@@ -2044,6 +2045,7 @@ public:
   }
 
   // The main thread of bottom up in global mapping
+  // HBA: https://blog.csdn.net/love20102011/article/details/160825783
   void thd_globalmapping(ros::NodeHandle &n)
   {
     n.param<double>("GBA/voxel_size", gba_voxel_size, 1.0);
