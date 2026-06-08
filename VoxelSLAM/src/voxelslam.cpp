@@ -1497,6 +1497,7 @@ public:
         jour += len;
       x_key = xc;
 
+      // Keyframe Aggregation
       PVecPtr pptr(new PVec);
       for(int i=0; i<win_size; i++)
       {
