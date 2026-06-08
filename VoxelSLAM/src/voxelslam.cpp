@@ -2058,8 +2058,8 @@ public:
 
     int smp_mp = 0;
     int buf_base = 0;
-    int wdsize = 10;
-    int mgsize = 5;
+    int wdsize = 10;  // HBA param, window size of submap
+    int mgsize = 5;   // HBA param, step size to update submap
     int thread_num = 5;
 
     while(n.ok())
@@ -2113,6 +2113,7 @@ public:
 
       Keyframe *gba_smp = new Keyframe(smp_local[0]->x0);
       vector<int> mps{smp_mp};
+      // extract intra-submap constraints for layer 1
       HBA_add_edge(xs, smp_local, gba_edges1, mps, 1, 2, gba_smp->plptr);
       gba_smp->id = smp_local[0]->id;
       gba_smp->mp = smp_mp;
@@ -2129,6 +2130,7 @@ public:
         }
         mtx_keyframe.unlock();
         gba_edges2.edges.clear(); gba_edges2.mates.clear();
+        // extract inter-submap constraints for layer 2
         HBA_add_edge(xs, gba_submaps, gba_edges2, cnct_map, total_max_iter, thread_num);
 
         if(is_finish)
