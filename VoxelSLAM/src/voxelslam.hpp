@@ -494,6 +494,8 @@ public:
     }
     string pcdname = savename + "/global_map.pcd";
     pcl::io::savePCDFileBinary(pcdname, pl_save); 
+    down_sampling_close(pl_save, 0.2);
+    pcl::io::savePCDFileBinary(savename + "/global_map_downsamp.pcd", pl_save);
   }
 
   void save_pose(vector<ScanPose*> &bbuf, string &fname, string posename, string &savepath)

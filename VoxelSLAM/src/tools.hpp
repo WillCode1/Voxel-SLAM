@@ -301,6 +301,69 @@ void down_sampling_close(pcl::PointCloud<PointType> &pl_feat, double voxel_size)
 
 }
 
+void down_sampling_close(pcl::PointCloud<pcl::PointXYZI> &pl_feat, double voxel_size)
+{
+  if(voxel_size < 0.001) return;
+
+  unordered_map<VOXEL_LOC, pcl::PointCloud<pcl::PointXYZI>::Ptr> feat_map;
+  float loc_xyz[3];
+  for(pcl::PointXYZI &p_c: pl_feat.points)
+  {
+    for(int j=0; j<3; j++)
+    {
+      loc_xyz[j] = p_c.data[j] / voxel_size;
+      if(loc_xyz[j] < 0)
+        loc_xyz[j] -= 1.0;
+    }
+
+    VOXEL_LOC position((int64_t)loc_xyz[0], (int64_t)loc_xyz[1], (int64_t)loc_xyz[2]);
+    auto iter = feat_map.find(position);
+    if(iter == feat_map.end())
+    {
+      pcl::PointCloud<pcl::PointXYZI>::Ptr pl_ptr(new pcl::PointCloud<pcl::PointXYZI>);
+      pl_ptr->push_back(p_c);
+      feat_map[position] = pl_ptr;
+    }
+    else
+    {
+      iter->second->push_back(p_c);
+    }
+  }
+
+  pl_feat.clear();
+  for(auto iter=feat_map.begin(); iter!=feat_map.end(); ++iter)
+  {
+    pcl::PointCloud<pcl::PointXYZI>::Ptr pl_ptr = iter->second;
+
+    pcl::PointXYZI pb = pl_ptr->points[0];
+    int plsize = pl_ptr->size();
+    for(int i=1; i<plsize; i++)
+    {
+      pcl::PointXYZI &pp = pl_ptr->points[i];
+      pb.x += pp.x; pb.y += pp.y; pb.z += pp.z;
+    }
+    pb.x /= plsize; pb.y /=plsize; pb.z /= plsize;
+
+    double ndis = 100;
+    int mnum = 0;
+    for(int i=0; i<plsize; i++)
+    {
+      pcl::PointXYZI &pp = pl_ptr->points[i];
+      double xx = pb.x - pp.x;
+      double yy = pb.y - pp.y;
+      double zz = pb.z - pp.z;
+      double dis = xx*xx + yy*yy + zz*zz;
+      if(dis < ndis)
+      {
+        mnum = i;
+        ndis = dis;
+      }
+    }
+
+    pl_feat.push_back(pl_ptr->points[mnum]);
+  }
+}
+
 class PointCluster
 {
 public:
