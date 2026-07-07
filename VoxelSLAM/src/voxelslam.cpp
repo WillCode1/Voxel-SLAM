@@ -782,6 +782,73 @@ public:
     
   }
 
+  template <typename T>
+  Eigen::Matrix<T, 3, 1> RotationMatrix2RPY(const Eigen::Matrix<T, 3, 3> &rotation)
+  {
+    // return rotation_matrix.eulerAngles(0, 1, 2);
+
+    // fix eigen bug: https://blog.csdn.net/qq_36594547/article/details/119218807
+    const Eigen::Matrix<T, 3, 1> &n = rotation.col(0);
+    const Eigen::Matrix<T, 3, 1> &o = rotation.col(1);
+    const Eigen::Matrix<T, 3, 1> &a = rotation.col(2);
+
+    Eigen::Matrix<T, 3, 1> rpy(3);
+    const double &y = atan2(n(1), n(0));
+    const double &p = atan2(-n(2), n(0) * cos(y) + n(1) * sin(y));
+    const double &r = atan2(a(0) * sin(y) - a(1) * cos(y), -o(0) * sin(y) + o(1) * cos(y));
+    rpy(0) = r;
+    rpy(1) = p;
+    rpy(2) = y;
+    return rpy;
+  }
+
+  template <typename T>
+  static Eigen::Matrix<T, 3, 3> RPY2RotationMatrix(const Eigen::Matrix<T, 3, 1> &eulerAngles)
+  {
+    Eigen::AngleAxis<T> rollAngle(Eigen::AngleAxis<T>(eulerAngles(0), Eigen::Matrix<T, 3, 1>::UnitX()));
+    Eigen::AngleAxis<T> pitchAngle(Eigen::AngleAxis<T>(eulerAngles(1), Eigen::Matrix<T, 3, 1>::UnitY()));
+    Eigen::AngleAxis<T> yawAngle(Eigen::AngleAxis<T>(eulerAngles(2), Eigen::Matrix<T, 3, 1>::UnitZ()));
+    Eigen::Matrix<T, 3, 3> rotation_matrix;
+    rotation_matrix = yawAngle * pitchAngle * rollAngle;
+    return rotation_matrix;
+  }
+
+  /**
+   * @brief 将预设重力方向和测量到的重力方向对比，将imu初始姿态对齐到地图
+   * @param preset_gravity 预设重力方向，也就是map方向
+   * @param meas_gravity 测量到的重力
+   * @param rot_init 返回的imu初始姿态
+   */
+  void get_imu_init_rot(const Eigen::Vector3d &preset_gravity, const Eigen::Vector3d &meas_gravity, Eigen::Matrix3d &rot_init)
+  {
+    Eigen::Matrix3d hat_grav = hat(-preset_gravity);
+    // sin(theta) = |a^b|/(|a|*|b|) = |axb|/(|a|*|b|)
+    double align_sin = (hat_grav * meas_gravity).norm() / meas_gravity.norm() / preset_gravity.norm();
+    // cos(theta) = a*b/(|a|*|b|)
+    double align_cos = preset_gravity.transpose() * meas_gravity;
+    align_cos = align_cos / preset_gravity.norm() / meas_gravity.norm();
+
+    Eigen::Matrix3d rot_mat_init;
+
+    if (align_sin < 1e-6)
+    {
+      if (align_cos > 1e-6)
+        rot_mat_init = Eigen::Matrix3d::Identity();
+      else
+        rot_mat_init = -Eigen::Matrix3d::Identity();
+    }
+    else
+    {
+      // 沿着axb方向旋转对应夹角，得到imu初始姿态
+      Eigen::Vector3d align_angle = hat_grav * meas_gravity / (hat_grav * meas_gravity).norm() * acos(align_cos);
+      rot_mat_init = Exp(align_angle);
+    }
+
+    Eigen::Vector3d rpy = RotationMatrix2RPY(rot_mat_init);
+    rpy.z() = 0;
+    rot_init = RPY2RotationMatrix(rpy);
+  }
+
   int initialization(deque<sensor_msgs::Imu::Ptr> &imus, Eigen::MatrixXd &hess, LidarFactor &voxhess, PLV(3) &pwld, pcl::PointCloud<PointType>::Ptr pcl_curr)
   {
     static vector<pcl::PointCloud<PointType>::Ptr> pl_origs;
@@ -791,6 +858,17 @@ public:
     pcl::PointCloud<PointType>::Ptr orig(new pcl::PointCloud<PointType>(*pcl_curr));
     if(odom_ekf.process(x_curr, *pcl_curr, imus) == 0)
       return 0;
+
+    static bool gravity_align = false;
+    if (!gravity_align)
+    {
+      // 1.gravity aligns the imu direction
+      Eigen::Vector3d preset_gravity = Eigen::Vector3d(0, 0, -9.81);
+      get_imu_init_rot(preset_gravity, x_curr.g, x_curr.R);
+      // 2.fix gravity vec
+      x_curr.g = x_curr.R * x_curr.g;
+      gravity_align = true;
+    }
 
     if(win_count == 0)
       imupre_scale_gravity = odom_ekf.scale_gravity;
