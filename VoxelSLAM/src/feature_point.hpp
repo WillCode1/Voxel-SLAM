@@ -109,7 +109,7 @@ public:
   double process(const sensor_msgs::PointCloud2::ConstPtr &msg, pcl::PointCloud<PointType> &pl_full)
   {
     double t0 = msg->header.stamp.toSec();
-    switch(lidar_type)
+    switch (lidar_type)
     {
     case VELODYNE:
       velodyne_handler(msg, pl_full);
@@ -122,11 +122,11 @@ public:
     case HESAI:
       hesai_handler(msg, pl_full);
       break;
-    
+
     case ROBOSENSE:
       t0 = robosense_handler(msg, pl_full);
       break;
-    
+
     case TARTANAIR:
       tartanair_handler(msg, pl_full);
       break;
@@ -140,11 +140,11 @@ public:
   }
 
   void livox_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg, pcl::PointCloud<PointType> &pl_full)
-  { 
+  {
     int plsize = msg->point_num;
     pl_full.reserve(plsize);
 
-    for(int i=0; i<plsize; i++)
+    for (int i = 0; i < plsize; i++)
     {
       PointType ap;
       ap.x = msg->points[i].x;
@@ -154,16 +154,14 @@ public:
       // ap.curvature = msg->points[i].offset_time / float(1000000); // ms
       ap.curvature = msg->points[i].offset_time / float(1000000000); // s
 
-      if(i % point_filter_num == 0)
+      if (i % point_filter_num == 0)
       {
-        if(ap.x*ap.x + ap.y*ap.y + ap.z*ap.z > blind)
+        if (ap.x * ap.x + ap.y * ap.y + ap.z * ap.z > blind)
         {
           pl_full.push_back(ap);
         }
       }
-
     }
-
   }
 
   void velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg, pcl::PointCloud<PointType> &pl_full)
@@ -172,30 +170,32 @@ public:
     pcl::fromROSMsg(*msg, pl_orig);
 
     int plsize = pl_orig.size();
-    if(plsize == 0) return;
-    if(pl_orig.back().time > 0.01 && pl_orig.back().time < 0.12)
+    if (plsize == 0)
+      return;
+    if (pl_orig.back().time > 0.01 && pl_orig.back().time < 0.12)
     {
       // for(velodyne_ros::Point &iter : pl_orig.points)
-      for(int i=0; i<plsize; i++)
+      for (int i = 0; i < plsize; i++)
       {
         velodyne_ros::Point &iter = pl_orig[i];
         PointType ap;
-        ap.x = iter.x; ap.y = iter.y; ap.z = iter.z;
-        
+        ap.x = iter.x;
+        ap.y = iter.y;
+        ap.z = iter.z;
+
         // ap.intensity = iter.intensity;
         // ap.curvature = iter.time * 1e-3; // ms
         // ap.curvature = iter.time * 1e-6;
         ap.curvature = iter.time;
 
-        if(i % point_filter_num == 0)
+        if (i % point_filter_num == 0)
         {
-          if(ap.x*ap.x + ap.y*ap.y + ap.z*ap.z > blind)
+          if (ap.x * ap.x + ap.y * ap.y + ap.z * ap.z > blind)
           {
             pl_full.push_back(ap);
           }
         }
       }
-
     }
     else
     {
@@ -206,33 +206,37 @@ public:
       double yaw_bias = 0;
       int cool = 0;
       float max_ang = 0;
-      for(int i=0; i<plsize; i++)
+      for (int i = 0; i < plsize; i++)
       {
         cool--;
         velodyne_ros::Point &iter = pl_orig[i];
         PointType ap;
-        ap.x = iter.x; ap.y = iter.y; ap.z = iter.z;
+        ap.x = iter.x;
+        ap.y = iter.y;
+        ap.z = iter.z;
 
-        if(fabs(ap.x) < 0.1)
+        if (fabs(ap.x) < 0.1)
           continue;
-        
+
         double yaw_angle = atan2(ap.y, ap.x) * 57.2957 - yaw_bias;
-        if(first_point)
+        if (first_point)
         {
           yaw_first = yaw_angle;
-          yaw_last  = yaw_angle;
+          yaw_last = yaw_angle;
           first_point = false;
         }
 
-        if(ap.x*ap.x + ap.y*ap.y + ap.z*ap.z < blind)
+        if (ap.x * ap.x + ap.y * ap.y + ap.z * ap.z < blind)
           continue;
 
-        if(yaw_angle - yaw_last > 180 && cool <= 0)
+        if (yaw_angle - yaw_last > 180 && cool <= 0)
         {
-          yaw_bias += 360; yaw_angle-= 360; cool = 1000;
+          yaw_bias += 360;
+          yaw_angle -= 360;
+          cool = 1000;
         }
 
-        if(fabs(yaw_angle - yaw_last) > 180)
+        if (fabs(yaw_angle - yaw_last) > 180)
         {
           yaw_angle += 360;
         }
@@ -240,17 +244,16 @@ public:
         ap.curvature = (yaw_first - yaw_angle) / omega_l;
         yaw_last = yaw_angle;
 
-        if(ap.curvature > max_ang)
+        if (ap.curvature > max_ang)
           max_ang = ap.curvature;
 
-        if(ap.curvature >= 0 && ap.curvature < 0.1)
-          if(i % point_filter_num == 0)
+        if (ap.curvature >= 0 && ap.curvature < 0.1)
+          if (i % point_filter_num == 0)
             pl_full.push_back(ap);
       }
 
       // printf("maxang: %f\n", max_ang);
     }
-
   }
 
   void ouster_handler(const sensor_msgs::PointCloud2::ConstPtr &msg, pcl::PointCloud<PointType> &pl_full)
@@ -260,7 +263,7 @@ public:
 
     int plsize = pl_orig.points.size();
     pl_full.reserve(plsize);
-    for(int i=0; i<plsize; i++)
+    for (int i = 0; i < plsize; i++)
     {
       PointType ap;
       ap.x = pl_orig.points[i].x;
@@ -270,27 +273,25 @@ public:
       // ap.curvature = pl_orig[i].t / float(1e6); // ms
       ap.curvature = pl_orig[i].t / float(1e9); // s
 
-      if(i % point_filter_num == 0)
+      if (i % point_filter_num == 0)
       {
-        if(ap.x*ap.x + ap.y*ap.y + ap.z*ap.z > blind)
+        if (ap.x * ap.x + ap.y * ap.y + ap.z * ap.z > blind)
         {
           pl_full.points.push_back(ap);
         }
       }
-
     }
-
   }
 
   void hesai_handler(const sensor_msgs::PointCloud2::ConstPtr &msg, pcl::PointCloud<PointType> &pl_full)
-  { 
+  {
     pcl::PointCloud<xt32_ros::Point> pl_orig;
     pcl::fromROSMsg(*msg, pl_orig);
 
     int plsize = pl_orig.points.size();
     pl_full.reserve(plsize);
     double time_head = pl_orig.points[0].timestamp;
-    for(int i=0; i<plsize; i++)
+    for (int i = 0; i < plsize; i++)
     {
       PointType added_pt;
 
@@ -305,15 +306,12 @@ public:
 
       if (i % point_filter_num == 0)
       {
-        if (added_pt.x*added_pt.x+added_pt.y*added_pt.y+added_pt.z*added_pt.z > blind)
+        if (added_pt.x * added_pt.x + added_pt.y * added_pt.y + added_pt.z * added_pt.z > blind)
         {
           pl_full.points.push_back(added_pt);
         }
       }
-
-
     }
-
   }
 
   double robosense_handler(const sensor_msgs::PointCloud2::ConstPtr &msg, pcl::PointCloud<PointType> &pl_full)
@@ -324,7 +322,7 @@ public:
     int plsize = pl_orig.points.size();
     pl_full.reserve(plsize);
     double t0 = pl_orig[0].timestamp;
-    for(int i=0; i<plsize; i++)
+    for (int i = 0; i < plsize; i++)
     {
       PointType ap;
       ap.x = pl_orig.points[i].x;
@@ -334,14 +332,13 @@ public:
       // ap.curvature = (pl_orig[i].timestamp - t0) * float(1e3); //
       ap.curvature = (pl_orig[i].timestamp - t0);
 
-      if(i % point_filter_num == 0)
+      if (i % point_filter_num == 0)
       {
-        if(ap.x*ap.x + ap.y*ap.y + ap.z*ap.z > blind)
+        if (ap.x * ap.x + ap.y * ap.y + ap.z * ap.z > blind)
         {
           pl_full.points.push_back(ap);
         }
       }
-
     }
 
     return t0;
@@ -353,18 +350,18 @@ public:
     pcl::fromROSMsg(*msg, pl_orig);
     pl_full.reserve(pl_orig.size());
 
-    PointType pp; pp.curvature = 0;
-    for(pcl::PointXYZ &ap: pl_orig.points)
+    PointType pp;
+    pp.curvature = 0;
+    for (pcl::PointXYZ &ap : pl_orig.points)
     {
       pp.x = ap.x;
       pp.y = ap.y;
-      pp.z = ap.z; 
+      pp.z = ap.z;
       pl_full.push_back(pp);
     }
 
     return;
   }
-
 };
 
 #endif
