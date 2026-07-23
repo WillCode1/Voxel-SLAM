@@ -938,7 +938,7 @@ public:
   }
 
   template <typename T>
-  Eigen::Matrix<T, 3, 1> RotationMatrix2RPY(const Eigen::Matrix<T, 3, 3> &rotation)
+  static Eigen::Matrix<T, 3, 1> RotationMatrix2RPY(const Eigen::Matrix<T, 3, 3> &rotation)
   {
     // return rotation_matrix.eulerAngles(0, 1, 2);
 
@@ -1029,6 +1029,10 @@ public:
       // 2.fix gravity vec
       x_curr.g = x_curr.R * x_curr.g;
       gravity_align = true;
+
+      auto tmp = RotationMatrix2RPY(x_curr.R);
+      printf("gravity_align: align rpy = (%.3f, %.3f, %.3f), the final gravity = (%.3f, %.3f, %.3f)!\n",
+             RAD2DEG(tmp.x()), RAD2DEG(tmp.y()), RAD2DEG(tmp.z()), x_curr.g.x(), x_curr.g.y(), x_curr.g.z());
     }
 
     if (win_count == 0)
@@ -2140,7 +2144,7 @@ public:
     double t0 = rclcpp::Clock().now().seconds();
 #endif
     while (gba_flag)
-      sleep(100);
+      sleep(0.1);
 
     for (PGO_Edge &edge : gba_edges1.edges)
     {
