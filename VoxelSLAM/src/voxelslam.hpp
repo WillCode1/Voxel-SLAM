@@ -6,28 +6,37 @@
 #include "feature_point.hpp"
 #include "loop_refine.hpp"
 #include <mutex>
+#include <malloc.h>
 #include <Eigen/Eigenvalues>
+#ifdef ROS1
 #include <tf/transform_broadcaster.h>
-#include <visualization_msgs/MarkerArray.h>
-#include <malloc.h>
-#include <geometry_msgs/PoseArray.h>
+#else
+#include <tf2_ros/transform_broadcaster.h>
+#endif
 #include <pcl/kdtree/kdtree_flann.h>
-#include <malloc.h>
 #include <gtsam/inference/Symbol.h>
 #include <gtsam/navigation/ImuFactor.h>
 #include <gtsam/navigation/CombinedImuFactor.h>
 #include <gtsam/nonlinear/GaussNewtonOptimizer.h>
 #include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
-#include <Eigen/Sparse>
-#include <Eigen/SparseQR>
 #include "BTC.h"
 
 using namespace std;
 
+#ifdef ROS1
 ros::Publisher pub_scan, pub_cmap, pub_init, pub_pmap;
 ros::Publisher pub_test, pub_prev_path, pub_curr_path;
 ros::Subscriber sub_imu, sub_pcl;
+#else
+rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_scan, pub_cmap, pub_init, pub_pmap;
+rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_test, pub_prev_path, pub_curr_path;
+rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu;
+rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr sub_pcl1;
+rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_pcl2;
+std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster;
+#endif
 
+#ifdef ROS1
 template <typename T>
 void pub_pl_func(T &pl, ros::Publisher &pub)
 {
@@ -39,10 +48,27 @@ void pub_pl_func(T &pl, ros::Publisher &pub)
   output.header.stamp = ros::Time::now();
   pub.publish(output);
 }
+#else
+template <typename T>
+void pub_pl_func(T &pl, rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr &pub)
+{
+  pl.height = 1;
+  pl.width = pl.size();
+  sensor_msgs::msg::PointCloud2 output;
+  pcl::toROSMsg(pl, output);
+  output.header.frame_id = "camera_init";
+  output.header.stamp = rclcpp::Clock().now();
+  pub->publish(output);
+}
+#endif
 
 mutex mBuf;
 Features feat;
+#ifdef ROS1
 deque<sensor_msgs::Imu::Ptr> imu_buf;
+#else
+deque<sensor_msgs::msg::Imu::SharedPtr> imu_buf;
+#endif
 deque<pcl::PointCloud<PointType>::Ptr> pcl_buf;
 deque<double> time_buf;
 
@@ -50,6 +76,7 @@ double imu_last_time = -1;
 int point_notime = 0;
 double last_pcl_time = -1;
 
+#ifdef ROS1
 void imu_handler(const sensor_msgs::Imu::ConstPtr &msg_in)
 {
   static int flag = 1;
@@ -60,13 +87,6 @@ void imu_handler(const sensor_msgs::Imu::ConstPtr &msg_in)
   }
 
   sensor_msgs::Imu::Ptr msg(new sensor_msgs::Imu(*msg_in));
-
-  // For Hilti 2022 exp03
-  // double t0 = 1646320760 + 255.5;
-  // double t1 = 1646320760 + 256.2;
-  // double tc = msg->header.stamp.toSec();
-  // if(tc > t0 && tc < t1)
-  //   msg->linear_acceleration.z = -9.7;
 
   mBuf.lock();
   imu_last_time = msg->header.stamp.toSec();
@@ -105,6 +125,84 @@ void pcl_handler(T &msg)
 }
 
 bool sync_packages(pcl::PointCloud<PointType>::Ptr &pl_ptr, deque<sensor_msgs::Imu::Ptr> &imus, IMUEKF &p_imu)
+#else
+void imu_handler(const sensor_msgs::msg::Imu::SharedPtr msg_in)
+{
+  static int flag = 1;
+  if (flag)
+  {
+    flag = 0;
+    printf("Time0: %lf\n", to_seconds(msg_in->header.stamp));
+  }
+
+  sensor_msgs::msg::Imu::SharedPtr msg(new sensor_msgs::msg::Imu(*msg_in));
+
+  mBuf.lock();
+  imu_last_time = to_seconds(msg->header.stamp);
+  imu_buf.push_back(msg);
+  mBuf.unlock();
+}
+
+void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::SharedPtr msg)
+{
+  pcl::PointCloud<PointType>::Ptr pl_ptr(new pcl::PointCloud<PointType>());
+  double t0 = feat.process(msg, *pl_ptr);
+
+  if (pl_ptr->empty())
+  {
+    PointType ap;
+    ap.x = 0;
+    ap.y = 0;
+    ap.z = 0;
+    ap.intensity = 0;
+    ap.curvature = 0;
+    pl_ptr->push_back(ap);
+    ap.curvature = 0.09;
+    pl_ptr->push_back(ap);
+  }
+
+  sort(pl_ptr->begin(), pl_ptr->end(), [](PointType &x, PointType &y)
+       { return x.curvature < y.curvature; });
+  while (pl_ptr->back().curvature > 0.11)
+    pl_ptr->points.pop_back();
+
+  mBuf.lock();
+  time_buf.push_back(t0);
+  pcl_buf.push_back(pl_ptr);
+  mBuf.unlock();
+}
+
+void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
+{
+  pcl::PointCloud<PointType>::Ptr pl_ptr(new pcl::PointCloud<PointType>());
+  double t0 = feat.process(msg, *pl_ptr);
+
+  if (pl_ptr->empty())
+  {
+    PointType ap;
+    ap.x = 0;
+    ap.y = 0;
+    ap.z = 0;
+    ap.intensity = 0;
+    ap.curvature = 0;
+    pl_ptr->push_back(ap);
+    ap.curvature = 0.09;
+    pl_ptr->push_back(ap);
+  }
+
+  sort(pl_ptr->begin(), pl_ptr->end(), [](PointType &x, PointType &y)
+       { return x.curvature < y.curvature; });
+  while (pl_ptr->back().curvature > 0.11)
+    pl_ptr->points.pop_back();
+
+  mBuf.lock();
+  time_buf.push_back(t0);
+  pcl_buf.push_back(pl_ptr);
+  mBuf.unlock();
+}
+
+bool sync_packages(pcl::PointCloud<PointType>::Ptr &pl_ptr, deque<sensor_msgs::msg::Imu::SharedPtr> &imus, IMUEKF &p_imu)
+#endif
 {
   static bool pl_ready = false;
 
@@ -142,10 +240,17 @@ bool sync_packages(pcl::PointCloud<PointType>::Ptr &pl_ptr, deque<sensor_msgs::I
     return false;
 
   mBuf.lock();
+#ifdef ROS1
   double imu_time = imu_buf.front()->header.stamp.toSec();
   while ((!imu_buf.empty()) && (imu_time < p_imu.pcl_end_time))
   {
     imu_time = imu_buf.front()->header.stamp.toSec();
+#else
+  double imu_time = to_seconds(imu_buf.front()->header.stamp);
+  while ((!imu_buf.empty()) && (imu_time < p_imu.pcl_end_time))
+  {
+    imu_time = to_seconds(imu_buf.front()->header.stamp);
+#endif
     if (imu_time > p_imu.pcl_end_time)
       break;
     imus.push_back(imu_buf.front());
@@ -290,7 +395,11 @@ double get_memory()
   return mem / (1048576);
 }
 
+#ifdef ROS1
 void icp_check(pcl::PointCloud<PointType> &pl_src, pcl::PointCloud<PointType> &pl_tar, ros::Publisher &pub_src, ros::Publisher &pub_tar, pair<Eigen::Vector3d, Eigen::Matrix3d> &loop_transform, IMUST &xx)
+#else
+void icp_check(pcl::PointCloud<PointType> &pl_src, pcl::PointCloud<PointType> &pl_tar, rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr &pub_src, rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr &pub_tar, pair<Eigen::Vector3d, Eigen::Matrix3d> &loop_transform, IMUST &xx)
+#endif
 {
   pcl::PointCloud<PointType> pl1, pl2;
   for (PointType ap : pl_src.points)
@@ -330,6 +439,7 @@ public:
     Eigen::Quaterniond q_this(xc.R);
     Eigen::Vector3d t_this = xc.p;
 
+#ifdef ROS1
     static tf::TransformBroadcaster br;
     tf::Transform transform;
     tf::Quaternion q;
@@ -341,6 +451,20 @@ public:
     transform.setRotation(q);
     ros::Time ct = ros::Time::now();
     br.sendTransform(tf::StampedTransform(transform, ct, "/camera_init", "/aft_mapped"));
+#else
+    geometry_msgs::msg::TransformStamped transform_stamped;
+    transform_stamped.header.stamp = rclcpp::Clock().now();
+    transform_stamped.header.frame_id = "/camera_init";
+    transform_stamped.child_frame_id = "/aft_mapped";
+    transform_stamped.transform.translation.x = t_this.x();
+    transform_stamped.transform.translation.y = t_this.y();
+    transform_stamped.transform.translation.z = t_this.z();
+    transform_stamped.transform.rotation.x = q_this.x();
+    transform_stamped.transform.rotation.y = q_this.y();
+    transform_stamped.transform.rotation.z = q_this.z();
+    transform_stamped.transform.rotation.w = q_this.w();
+    tf_broadcaster->sendTransform(transform_stamped);
+#endif
   }
 
   void pub_localtraj(PLV(3) & pwld, double jour, IMUST &x_curr, int cur_session, pcl::PointCloud<PointType> &pcl_path)
@@ -401,7 +525,11 @@ public:
     pub_pl_func(pcl_send, pub_cmap);
   }
 
+#ifdef ROS1
   void pub_global_path(vector<vector<ScanPose *> *> &relc_bl_buf, ros::Publisher &pub_relc, vector<int> &ids)
+#else
+  void pub_global_path(vector<vector<ScanPose *> *> &relc_bl_buf, rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr &pub_relc, vector<int> &ids)
+#endif
   {
     pcl::PointCloud<pcl::PointXYZI> pl;
     pcl::PointXYZI pp;
@@ -421,7 +549,11 @@ public:
     pub_pl_func(pl, pub_relc);
   }
 
+#ifdef ROS1
   void pub_globalmap(vector<vector<Keyframe *> *> &relc_submaps, vector<int> &ids, ros::Publisher &pub)
+#else
+  void pub_globalmap(vector<vector<Keyframe *> *> &relc_submaps, vector<int> &ids, rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr &pub)
+#endif
   {
     pcl::PointCloud<pcl::PointXYZI> pl;
     pub_pl_func(pl, pub);
@@ -619,10 +751,19 @@ public:
   }
 
   // loading the offline map
+#ifdef ROS1
   void previous_map_names(ros::NodeHandle &n, vector<string> &fnames, vector<double> &juds)
+#else
+  void previous_map_names(rclcpp::Node::SharedPtr &node, vector<string> &fnames, vector<double> &juds)
+#endif
   {
     string premap;
+#ifdef ROS1
     n.param<string>("General/previous_map", premap, "");
+#else
+    node->declare_parameter("previous_map", "");
+    node->get_parameter("previous_map", premap);
+#endif
     premap.erase(remove_if(premap.begin(), premap.end(), ::isspace), premap.end());
     stringstream ss(premap);
     string str;
@@ -647,14 +788,29 @@ public:
     }
   }
 
+#ifdef ROS1
   void previous_map_read(vector<STDescManager *> &std_managers, vector<vector<ScanPose *> *> &multimap_scanPoses, vector<vector<Keyframe *> *> &multimap_keyframes, ConfigSetting &config_setting, PGO_Edges &edges, ros::NodeHandle &n, vector<string> &fnames, vector<double> &juds, string &savepath, int win_size)
+#else
+  void previous_map_read(vector<STDescManager *> &std_managers, vector<vector<ScanPose *> *> &multimap_scanPoses, vector<vector<Keyframe *> *> &multimap_keyframes, ConfigSetting &config_setting, PGO_Edges &edges, rclcpp::Node::SharedPtr &node, vector<string> &fnames, vector<double> &juds, string &savepath, int win_size)
+#endif
   {
     int acsize = 10;
     int mgsize = 5;
+#ifdef ROS1
     n.param<int>("Loop/acsize", acsize, 10);
     n.param<int>("Loop/mgsize", mgsize, 5);
+#else
+    node->declare_parameter("loop_acsize", 10);
+    node->declare_parameter("loop_mgsize", 5);
+    node->get_parameter("loop_acsize", acsize);
+    node->get_parameter("loop_mgsize", mgsize);
+#endif
 
+#ifdef ROS1
     for (int fn = 0; fn < fnames.size() && n.ok(); fn++)
+#else
+    for (int fn = 0; fn < fnames.size() && rclcpp::ok(); fn++)
+#endif
     {
       string fname = savepath + fnames[fn];
       vector<ScanPose *> *bl_tem = new vector<ScanPose *>();
@@ -672,7 +828,11 @@ public:
       pcl::PointCloud<PointType> pl_lc;
       pcl::PointCloud<pcl::PointXYZI>::Ptr pl_btc(new pcl::PointCloud<pcl::PointXYZI>());
 
+#ifdef ROS1
       for (int i = 0; i < bl_tem->size() && n.ok(); i++)
+#else
+      for (int i = 0; i < bl_tem->size() && rclcpp::ok(); i++)
+#endif
       {
         IMUST &xc = bl_tem->at(i)->x;
         string pcdname = fname + "/" + to_string(i) + ".pcd";
@@ -721,7 +881,11 @@ public:
       cout << "Generating BTC descriptors..." << "\n";
 
       int subsize = keyframes_tem->size();
+#ifdef ROS1
       for (int i = 0; i + acsize < subsize && n.ok(); i += mgsize)
+#else
+      for (int i = 0; i + acsize < subsize && rclcpp::ok(); i += mgsize)
+#endif
       {
         int up = i + acsize;
         pl_btc->clear();
@@ -753,7 +917,11 @@ public:
     }
 
     vector<int> ids_all;
+#ifdef ROS1
     for (int fn = 0; fn < fnames.size() && n.ok(); fn++)
+#else
+    for (int fn = 0; fn < fnames.size() && rclcpp::ok(); fn++)
+#endif
       ids_all.push_back(fn);
 
     // gtsam::Values initial;

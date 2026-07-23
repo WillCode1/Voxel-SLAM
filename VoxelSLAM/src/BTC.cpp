@@ -1,6 +1,6 @@
 #include "BTC.h"
 
-void read_parameters(ros::NodeHandle &nh, ConfigSetting &config_setting, int isHighFly)
+void read_parameters(ConfigSetting &config_setting, int isHighFly)
 {
   if(!isHighFly)
   {
@@ -115,7 +115,7 @@ void BTCOctoTree::init_plane() {
   Eigen::Matrix3d::Index evalsMin, evalsMax;
   evalsReal.rowwise().sum().minCoeff(&evalsMin);
   evalsReal.rowwise().sum().maxCoeff(&evalsMax);
-  int evalsMid = 3 - evalsMin - evalsMax;
+  // int evalsMid = 3 - evalsMin - evalsMax;
   if (evalsReal(evalsMin) < config_setting_.plane_detection_thre_) 
   {
     plane_ptr_->normal_ << evecs.real()(0, evalsMin), evecs.real()(1, evalsMin),
@@ -219,7 +219,7 @@ void STDescManager::SearchLoop(
   // step2, select best candidates from rough candidates
   double best_score = 0;
   int best_candidate_id = -1;
-  int triggle_candidate = -1;
+  // int triggle_candidate = -1;
   std::pair<Eigen::Vector3d, Eigen::Matrix3d> best_transform;
   std::vector<std::pair<STD, STD>> best_sucess_match_vec;
   for (size_t i = 0; i < candidate_matcher_vec.size(); i++) 
@@ -238,7 +238,7 @@ void STDescManager::SearchLoop(
       best_candidate_id = candidate_matcher_vec[i].match_id_.second;
       best_transform = relative_pose;
       best_sucess_match_vec = sucess_match_vec;
-      triggle_candidate = i;
+      // triggle_candidate = i;
       // std::cout << "[Retreival] best candidate:" << best_candidate_id
       //           << ", score:" << best_score << std::endl;
     }
@@ -434,7 +434,7 @@ void STDescManager::get_project_plane(
         Eigen::Matrix3f::Index evalsMin, evalsMax;
         evalsReal.rowwise().sum().minCoeff(&evalsMin);
         evalsReal.rowwise().sum().maxCoeff(&evalsMax);
-        Eigen::Vector3d evecMin = evecs.real().col(evalsMin);
+        // Eigen::Vector3d evecMin = evecs.real().col(evalsMin);
         merge_plane->normal_ << evecs.real()(0, evalsMin),
             evecs.real()(1, evalsMin), evecs.real()(2, evalsMin);
         merge_plane->radius_ = sqrt(evalsReal(evalsMax));
@@ -546,7 +546,7 @@ void STDescManager::merge_plane(std::vector<BTCPlane *> &origin_list,
         Eigen::Matrix3f::Index evalsMin, evalsMax;
         evalsReal.rowwise().sum().minCoeff(&evalsMin);
         evalsReal.rowwise().sum().maxCoeff(&evalsMax);
-        Eigen::Vector3d evecMin = evecs.real().col(evalsMin);
+        // Eigen::Vector3d evecMin = evecs.real().col(evalsMin);
         merge_plane->normal_ << evecs.real()(0, evalsMin),
             evecs.real()(1, evalsMin), evecs.real()(2, evalsMin);
         merge_plane->radius_ = sqrt(evalsReal(evalsMax));
@@ -1178,7 +1178,7 @@ void STDescManager::candidate_selector(
         auto iter = data_base_.find(position);
         if (iter != data_base_.end()) 
         {
-          bool is_push_position = false;
+          // bool is_push_position = false;
           for (size_t j = 0; j < iter->second.size(); j++) 
           {
             if ((descriptor.frame_number_ -
@@ -1255,7 +1255,7 @@ void STDescManager::candidate_selector(
       match_triangle_list.match_frame_ = max_vote_index;
       match_triangle_list.match_id_.first = current_frame_id_;
       match_triangle_list.match_id_.second = max_vote_index;
-      double mean_dis = 0;
+      // double mean_dis = 0;
       for (size_t i = 0; i < index_recorder.size(); i++) 
       {
         if (match_list_index[i] == max_vote_index) 

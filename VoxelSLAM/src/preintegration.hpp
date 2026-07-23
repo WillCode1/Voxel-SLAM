@@ -2,7 +2,11 @@
 
 #include "tools.hpp"
 #include <deque>
+#ifdef ROS1
 #include <sensor_msgs/Imu.h>
+#else
+#include <sensor_msgs/msg/imu.hpp>
+#endif
 
 // Don't forget to init
 double imupre_scale_gravity = 1.0;
@@ -27,7 +31,11 @@ public:
 
   Eigen::Matrix<double, DIM, DIM> cov;
 
+#ifdef ROS1
   deque<sensor_msgs::ImuPtr> _imus;
+#else
+  deque<sensor_msgs::msg::Imu::SharedPtr> _imus;
+#endif
 
   IMU_PRE(const Eigen::Vector3d &bg1 = Eigen::Vector3d::Zero(), const Eigen::Vector3d &ba1 = Eigen::Vector3d::Zero())
   {
@@ -47,16 +55,27 @@ public:
     cov.setZero();
   }
 
+#ifdef ROS1
   void push_imu(deque<sensor_msgs::ImuPtr> &imus)
+#else
+  void push_imu(deque<sensor_msgs::msg::Imu::SharedPtr> &imus)
+#endif
   {
     _imus.insert(_imus.end(), imus.begin(), imus.end());
     Eigen::Vector3d cur_gyr, cur_acc;
     for(auto it_imu=imus.begin()+1; it_imu!=imus.end(); it_imu++)
     {
+#ifdef ROS1
       sensor_msgs::Imu &imu1 = **(it_imu-1);
       sensor_msgs::Imu &imu2 = **it_imu;
 
       double dt = imu2.header.stamp.toSec() - imu1.header.stamp.toSec();
+#else
+      sensor_msgs::msg::Imu &imu1 = **(it_imu-1);
+      sensor_msgs::msg::Imu &imu2 = **it_imu;
+
+      double dt = to_seconds(imu2.header.stamp) - to_seconds(imu1.header.stamp);
+#endif
 
       cur_gyr << 0.5*(imu1.angular_velocity.x + imu2.angular_velocity.x),
                  0.5*(imu1.angular_velocity.y + imu2.angular_velocity.y),

@@ -1,0 +1,55 @@
+voxel_slam:
+    ros__parameters:
+        # General:
+        lid_topic: "/livox/lidar"
+        imu_topic: "/livox/imu"
+        save_path: "/home/zale/save_datas/"
+        previous_map: ""
+        bagname: "mid360_init"
+        lidar_type: 0
+        blind: 0.5 # 0.5
+        point_filter_num: 3
+        extrinsic_tran: [-0.011, -0.02329, 0.04412]
+        extrinsic_rota: [1., 0., 0.,
+                         0., 1., 0.,
+                         0., 0., 1.]
+        is_save_map: 0
+
+        # Odometry:
+        odom_max_init: 30
+        odom_cov_gyr: 0.1
+        odom_cov_acc: 1.0
+        odom_rdw_gyr: 0.0001
+        odom_rdw_acc: 0.0001
+        # down_size: 0.5
+        odom_down_size: 0.1
+        odom_dept_err: 0.02
+        odom_beam_err: 0.15
+        # voxel_size: 4
+        odom_voxel_size: 1.0
+        odom_min_eigen_value: 0.0025
+        odom_degrade_bound: 10
+        odom_point_notime: 0
+
+        # LocalBA:
+        localba_win_size: 10
+        localba_max_layer: 2
+        localba_cov_gyr: 0.01
+        localba_cov_acc: 2.0
+        localba_rdw_gyr: 0.0001
+        localba_rdw_acc: 0.0001
+        localba_min_ba_point: 1
+        localba_plane_eigen_value_thre: [4.0, 4.0, 4.0, 4.0]
+        localba_imu_coef: 0.0002
+        localba_thread_num: 5
+
+        # Loop:
+        loop_jud_default: 0.45
+        loop_icp_eigval: 9.
+        loop_ratio_drift: 0.01
+
+        # GBA:
+        gba_voxel_size: 2.0
+        gba_min_eigen_value: 0.01
+        gba_eigen_value_array: [4.0, 4.0, 4.0, 4.0]
+        gba_total_max_iter: 6

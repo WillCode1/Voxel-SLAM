@@ -3,7 +3,12 @@
 
 #include "tools.hpp"
 #include <deque>
+#ifdef ROS1
 #include <sensor_msgs/Imu.h>
+#else
+#include <sensor_msgs/msg/imu.hpp>
+#include <rclcpp/rclcpp.hpp>
+#endif
 
 class IMUEKF
 {
@@ -13,7 +18,11 @@ public:
   double pcl_beg_time, pcl_end_time, last_pcl_end_time;
   int init_num;
   Eigen::Vector3d mean_acc, mean_gyr;
+#ifdef ROS1
   sensor_msgs::Imu::Ptr last_imu;
+#else
+  sensor_msgs::msg::Imu::SharedPtr last_imu;
+#endif
   int min_init_num = 30;
   Eigen::Vector3d angvel_last, acc_s_last;
 
@@ -38,7 +47,11 @@ public:
     angvel_last.setZero(); acc_s_last.setZero();
   }
 
+#ifdef ROS1
   void motion_blur(IMUST &xc, pcl::PointCloud<PointType> &pcl_in, deque<sensor_msgs::Imu::Ptr> &imus)
+#else
+  void motion_blur(IMUST &xc, pcl::PointCloud<PointType> &pcl_in, deque<sensor_msgs::msg::Imu::SharedPtr> &imus)
+#endif
   {
     imus.push_front(last_imu);
 
@@ -58,10 +71,17 @@ public:
     double dt = 0;
     for(auto it_imu=imus.begin(); it_imu!=imus.end()-1; it_imu++)
     {
+#ifdef ROS1
       sensor_msgs::Imu &head = **(it_imu);
       sensor_msgs::Imu &tail = **(it_imu+1);
 
       if(tail.header.stamp.toSec() < last_pcl_end_time) continue;
+#else
+      sensor_msgs::msg::Imu &head = **(it_imu);
+      sensor_msgs::msg::Imu &tail = **(it_imu+1);
+
+      if(to_seconds(tail.header.stamp) < last_pcl_end_time) continue;
+#endif
 
       angvel_avr << 0.5*(head.angular_velocity.x + tail.angular_velocity.x), 
                     0.5*(head.angular_velocity.y + tail.angular_velocity.y), 
@@ -78,10 +98,18 @@ public:
       //   dt = tail.header.stamp.toSec() - last_pcl_end_time;
       // else
       //   dt = tail.header.stamp.toSec() - head.header.stamp.toSec();
+#ifdef ROS1
       double cur_time = head.header.stamp.toSec();
+#else
+      double cur_time = to_seconds(head.header.stamp);
+#endif
       if(cur_time < last_pcl_end_time)
         cur_time = last_pcl_end_time;
+#ifdef ROS1
       dt = tail.header.stamp.toSec() - cur_time;
+#else
+      dt = to_seconds(tail.header.stamp) - cur_time;
+#endif
 
       double offt = cur_time - pcl_beg_time;
       imu_poses.emplace_back(offt, R_imu, pos_imu, vel_imu, angvel_avr, acc_imu);
@@ -114,7 +142,11 @@ public:
       // imu_poses.emplace_back(offt, R_imu, pos_imu, vel_imu, angvel_avr, acc_imu);
     }
 
+#ifdef ROS1
     double imu_end_time = imus.back()->header.stamp.toSec();
+#else
+    double imu_end_time = to_seconds(imus.back()->header.stamp);
+#endif
     double note = pcl_end_time > imu_end_time ? 1.0 : -1.0;
     dt = note * (pcl_end_time - imu_end_time);
     xc.v = vel_imu + note * acc_imu * dt;
@@ -122,10 +154,17 @@ public:
     xc.p = pos_imu + note * vel_imu * dt + note * 0.5 * acc_imu * dt * dt;
     xc.t = pcl_end_time;
 
+#ifdef ROS1
     sensor_msgs::ImuPtr imu1(new sensor_msgs::Imu(*imus.front()));
     sensor_msgs::ImuPtr imu2(new sensor_msgs::Imu(*imus.back()));
     imu1->header.stamp.fromSec(last_pcl_end_time);
     imu2->header.stamp.fromSec(pcl_end_time);
+#else
+    sensor_msgs::msg::Imu::SharedPtr imu1(new sensor_msgs::msg::Imu(*imus.front()));
+    sensor_msgs::msg::Imu::SharedPtr imu2(new sensor_msgs::msg::Imu(*imus.back()));
+    imu1->header.stamp = rclcpp::Time(last_pcl_end_time * 1e9);
+    imu2->header.stamp = rclcpp::Time(pcl_end_time * 1e9);
+#endif
     // imus.pop_front();
     last_imu = imus.back();
     last_pcl_end_time = pcl_end_time;
@@ -164,10 +203,18 @@ public:
 
   }
 
+#ifdef ROS1
   void IMU_init(deque<sensor_msgs::Imu::Ptr> &imus)
+#else
+  void IMU_init(deque<sensor_msgs::msg::Imu::SharedPtr> &imus)
+#endif
   {
     Eigen::Vector3d cur_acc, cur_gyr;
+#ifdef ROS1
     for(sensor_msgs::Imu::Ptr imu: imus)
+#else
+    for(sensor_msgs::msg::Imu::SharedPtr imu: imus)
+#endif
     {
       cur_acc << imu->linear_acceleration.x,
                  imu->linear_acceleration.y,
@@ -194,7 +241,11 @@ public:
     last_imu = imus.back();
   }
 
+#ifdef ROS1
   int process(IMUST &x_curr, pcl::PointCloud<PointType> &pcl_in, deque<sensor_msgs::Imu::Ptr> &imus)
+#else
+  int process(IMUST &x_curr, pcl::PointCloud<PointType> &pcl_in, deque<sensor_msgs::msg::Imu::SharedPtr> &imus)
+#endif
   {
     if(!init_flag)
     {

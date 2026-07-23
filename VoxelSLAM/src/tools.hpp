@@ -21,6 +21,12 @@ using namespace std;
 
 Eigen::Matrix3d I33(Eigen::Matrix3d::Identity());
 
+template <typename T>
+double to_seconds(const T& stamp)
+{
+  return stamp.sec + stamp.nanosec * 1.e-9;
+}
+
 class VOXEL_LOC
 {
 public:
