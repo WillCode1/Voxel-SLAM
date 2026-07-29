@@ -417,11 +417,16 @@ public:
     node->get_parameter("extrinsic_rota", vecR);
     node->get_parameter("is_save_map", is_save_map);
 
-    sub_imu = node->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 1000, imu_handler);
+    auto imu_qos = rclcpp::QoS(rclcpp::KeepLast(20000));
+    imu_qos.reliable();
+    imu_qos.durability_volatile();
+    auto qos = rclcpp::SensorDataQoS();
+
+    sub_imu = node->create_subscription<sensor_msgs::msg::Imu>(imu_topic, imu_qos, imu_handler);
     if (feat.lidar_type == LIVOX)
-      sub_pcl1 = node->create_subscription<livox_ros_driver2::msg::CustomMsg>(lid_topic, 1000, livox_pcl_cbk);
+      sub_pcl1 = node->create_subscription<livox_ros_driver2::msg::CustomMsg>(lid_topic, qos, livox_pcl_cbk);
     else
-      sub_pcl2 = node->create_subscription<sensor_msgs::msg::PointCloud2>(lid_topic, 1000, standard_pcl_cbk);
+      sub_pcl2 = node->create_subscription<sensor_msgs::msg::PointCloud2>(lid_topic, qos, standard_pcl_cbk);
     tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(*node);
 
     node->declare_parameter("odom_cov_gyr", 0.1);
@@ -1887,6 +1892,7 @@ public:
 
             IMUST &xx = multimap_scanPoses[id]->at(ord_bl)->x;
             double drift_p = (xx.R * loop_transform.first + xx.p - xc.p).norm();
+            double dis_p = (xx.p - xc.p).norm();
 
             bool isPush = false;
             int step = -1;
@@ -1894,9 +1900,9 @@ public:
             if (id == cur_id)
             {
               double span = smp->jour - keyframes->at(search_result.first)->jour;
-              printf("drift: %lf %lf\n", drift_p, span);
+              printf("drift: %lf %lf %lf\n", drift_p, dis_p, span);
 
-              if (drift_p / span < ratio_drift)
+              if (drift_p / span < ratio_drift && dis_p < 5)
               {
                 isPush = true;
                 step = stepsizes.size() - 2;
@@ -1904,6 +1910,7 @@ public:
                 if (relc_counts[id] > curr_halt && drift_p > 0.10)
                 {
                   isOpt = true;
+                  printf("\033[32;43misOpt!\033[0m\n");
                   for (int &cnt : relc_counts)
                     cnt = 0;
                 }
@@ -1951,7 +1958,7 @@ public:
                 int id1 = stepsizes[step] + ord_bl;
                 int id2 = stepsizes.back() - 1;
                 add_edge(id1, id2, loop_transform.second, loop_transform.first, graph, odom_noise);
-                printf("addedge: (%d %d) (%d %d)\n", id, cur_id, ord_bl, buf_base - 1);
+                printf("\033[32;43maddedge: (%d %d) (%d %d)\033[0m\n", id, cur_id, ord_bl, buf_base - 1);
               }
             }
 
