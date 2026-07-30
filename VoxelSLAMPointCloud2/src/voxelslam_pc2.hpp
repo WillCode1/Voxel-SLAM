@@ -30,11 +30,18 @@
 #ifndef VOXELSLAM_PC2_H
 #define VOXELSLAM_PC2_H
 
+#ifdef ROS1
 #include <sensor_msgs/PointCloud2.h>
-
 #include <rviz/message_filter_display.h>
 
 namespace rviz
+#else
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <rviz_common/message_filter_display.hpp>
+#include <rviz_default_plugins/displays/pointcloud/point_cloud_common.hpp>
+
+namespace rviz_common
+#endif
 {
 class IntProperty;
 class PointCloudCommon;
@@ -53,7 +60,11 @@ class PointCloudCommon;
 namespace voxelslam_pointcloud2
 {
 
+#ifdef ROS1
 class PointCloud2Display : public rviz::MessageFilterDisplay<sensor_msgs::PointCloud2>
+#else
+class PointCloud2Display : public rviz_common::MessageFilterDisplay<sensor_msgs::msg::PointCloud2>
+#endif
 {
   Q_OBJECT
 public:
@@ -69,9 +80,15 @@ protected:
   void onInitialize() override;
 
   /** @brief Process a single message.  Overridden from MessageFilterDisplay. */
+#ifdef ROS1
   void processMessage(const sensor_msgs::PointCloud2ConstPtr& cloud) override;
 
   rviz::PointCloudCommon* point_cloud_common_;
+#else
+  void processMessage(sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud) override;
+
+  rviz_default_plugins::PointCloudCommon* point_cloud_common_;
+#endif
 };
 
 } // namespace rviz

@@ -30,6 +30,7 @@
 #include <OgreSceneNode.h>
 #include <OgreSceneManager.h>
 
+#ifdef ROS1
 #include <ros/time.h>
 
 #include <rviz/default_plugin/point_cloud_common.h>
@@ -39,139 +40,179 @@
 #include <rviz/ogre_helpers/point_cloud.h>
 #include <rviz/properties/int_property.h>
 #include <rviz/validate_floats.h>
+#else
+#include <rclcpp/time.hpp>
+
+#include <sensor_msgs/point_cloud_conversion.hpp>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/properties/int_property.hpp>
+#include <rviz_common/validate_floats.hpp>
+#endif
 
 #include "voxelslam_pc2.hpp"
 
 namespace voxelslam_pointcloud2
 {
-PointCloud2Display::PointCloud2Display() : point_cloud_common_(new rviz::PointCloudCommon(this))
-{
-}
+#ifdef ROS1
+  PointCloud2Display::PointCloud2Display() : point_cloud_common_(new rviz::PointCloudCommon(this))
+#else
+  PointCloud2Display::PointCloud2Display() : point_cloud_common_(new rviz_default_plugins::PointCloudCommon(this))
+#endif
+  {
+  }
 
-PointCloud2Display::~PointCloud2Display()
-{
-  PointCloud2Display::unsubscribe();
-  delete point_cloud_common_;
-}
+  PointCloud2Display::~PointCloud2Display()
+  {
+    PointCloud2Display::unsubscribe();
+    delete point_cloud_common_;
+  }
 
-void PointCloud2Display::onInitialize()
-{
-  // Use the threaded queue for processing of incoming messages
-  update_nh_.setCallbackQueue(context_->getThreadedQueue());
+  void PointCloud2Display::onInitialize()
+  {
+#ifdef ROS1
+    // Use the threaded queue for processing of incoming messages
+    update_nh_.setCallbackQueue(context_->getThreadedQueue());
+#else
+    // ROS 2 中不再需要手动设置回调队列
+    // QoS 在订阅时通过参数配置
+#endif
 
-  MFDClass::onInitialize();
-  point_cloud_common_->initialize(context_, scene_node_);
-}
+    MFDClass::onInitialize();
+    point_cloud_common_->initialize(context_, scene_node_);
+  }
 
-void PointCloud2Display::processMessage(const sensor_msgs::PointCloud2ConstPtr& cloud)
-{
+#ifdef ROS1
+  void PointCloud2Display::processMessage(const sensor_msgs::PointCloud2ConstPtr& cloud) 
+#else
+  void PointCloud2Display::processMessage(sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud)
+#endif
+  {
   // Filter any nan values out of the cloud.  Any nan values that make it through to PointCloudBase
   // will get their points put off in lala land, but it means they still do get processed/rendered
   // which can be a big performance hit
-  sensor_msgs::PointCloud2Ptr filtered(new sensor_msgs::PointCloud2);
-  int32_t xi = rviz::findChannelIndex(cloud, "x");
-  int32_t yi = rviz::findChannelIndex(cloud, "y");
-  int32_t zi = rviz::findChannelIndex(cloud, "z");
+#ifdef ROS1
+    sensor_msgs::PointCloud2Ptr filtered(new sensor_msgs::PointCloud2);
+    int32_t xi = rviz::findChannelIndex(cloud, "x");
+    int32_t yi = rviz::findChannelIndex(cloud, "y");
+    int32_t zi = rviz::findChannelIndex(cloud, "z");
+#else
+    sensor_msgs::msg::PointCloud2::SharedPtr filtered(new sensor_msgs::msg::PointCloud2);
+    int32_t xi = sensor_msgs::getPointCloud2FieldIndex(*cloud, "x");
+    int32_t yi = sensor_msgs::getPointCloud2FieldIndex(*cloud, "y");
+    int32_t zi = sensor_msgs::getPointCloud2FieldIndex(*cloud, "z");
+#endif
 
-  if (xi == -1 || yi == -1 || zi == -1)
-  {
-    return;
-  }
-
-  const uint32_t xoff = cloud->fields[xi].offset;
-  const uint32_t yoff = cloud->fields[yi].offset;
-  const uint32_t zoff = cloud->fields[zi].offset;
-  const uint32_t point_step = cloud->point_step;
-  const size_t point_count = cloud->width * cloud->height;
-
-  if (point_count * point_step != cloud->data.size())
-  {
-    std::stringstream ss;
-    ss << "Data size (" << cloud->data.size() << " bytes) does not match width (" << cloud->width
-       << ") times height (" << cloud->height << ") times point_step (" << point_step
-       << ").  Dropping message.";
-    setStatusStd(rviz::StatusProperty::Error, "Message", ss.str());
-    return;
-  }
-
-  filtered->data.resize(cloud->data.size());
-  uint32_t output_count;
-  if (point_count == 0)
-  {
-    output_count = 0;
-  }
-  else
-  {
-    uint8_t* output_ptr = &filtered->data.front();
-    const uint8_t *ptr = &cloud->data.front(), *ptr_end = &cloud->data.back(), *ptr_init;
-    size_t points_to_copy = 0;
-    for (; ptr < ptr_end; ptr += point_step)
+    if (xi == -1 || yi == -1 || zi == -1)
     {
-      float x = *reinterpret_cast<const float*>(ptr + xoff);
-      float y = *reinterpret_cast<const float*>(ptr + yoff);
-      float z = *reinterpret_cast<const float*>(ptr + zoff);
-      if (rviz::validateFloats(x) && rviz::validateFloats(y) && rviz::validateFloats(z))
+      return;
+    }
+
+    const uint32_t xoff = cloud->fields[xi].offset;
+    const uint32_t yoff = cloud->fields[yi].offset;
+    const uint32_t zoff = cloud->fields[zi].offset;
+    const uint32_t point_step = cloud->point_step;
+    const size_t point_count = cloud->width * cloud->height;
+
+    if (point_count * point_step != cloud->data.size())
+    {
+      std::stringstream ss;
+      ss << "Data size (" << cloud->data.size() << " bytes) does not match width (" << cloud->width
+         << ") times height (" << cloud->height << ") times point_step (" << point_step
+         << ").  Dropping message.";
+#ifdef ROS1
+      setStatusStd(rviz::StatusProperty::Error, "Message", ss.str());
+#else
+      setStatusStd(rviz_common::properties::StatusProperty::Error, "Message", ss.str());
+#endif
+      return;
+    }
+
+    filtered->data.resize(cloud->data.size());
+    uint32_t output_count;
+    if (point_count == 0)
+    {
+      output_count = 0;
+    }
+    else
+    {
+      uint8_t* output_ptr = &filtered->data.front();
+      const uint8_t *ptr = &cloud->data.front(), *ptr_end = &cloud->data.back(), *ptr_init = nullptr;
+      size_t points_to_copy = 0;
+      for (; ptr < ptr_end; ptr += point_step)
       {
-        if (points_to_copy == 0)
+        float x = *reinterpret_cast<const float*>(ptr + xoff);
+        float y = *reinterpret_cast<const float*>(ptr + yoff);
+        float z = *reinterpret_cast<const float*>(ptr + zoff);
+#ifdef ROS1
+        if (rviz::validateFloats(x) && rviz::validateFloats(y) && rviz::validateFloats(z))
+#else
+        if (rviz_common::validateFloats(x) && rviz_common::validateFloats(y) && rviz_common::validateFloats(z))
+#endif
         {
-          // Only memorize where to start copying from
-          ptr_init = ptr;
-          points_to_copy = 1;
+          if (points_to_copy == 0)
+          {
+            // Only memorize where to start copying from
+            ptr_init = ptr;
+            points_to_copy = 1;
+          }
+          else
+          {
+            ++points_to_copy;
+          }
         }
         else
         {
-          ++points_to_copy;
+          if (points_to_copy)
+          {
+            // Copy all the points that need to be copied
+            memcpy(output_ptr, ptr_init, point_step * points_to_copy);
+            output_ptr += point_step * points_to_copy;
+            points_to_copy = 0;
+          }
         }
       }
-      else
+      // Don't forget to flush what needs to be copied
+      if (points_to_copy)
       {
-        if (points_to_copy)
-        {
-          // Copy all the points that need to be copied
-          memcpy(output_ptr, ptr_init, point_step * points_to_copy);
-          output_ptr += point_step * points_to_copy;
-          points_to_copy = 0;
-        }
+        memcpy(output_ptr, ptr_init, point_step * points_to_copy);
+        output_ptr += point_step * points_to_copy;
       }
+      output_count = (output_ptr - &filtered->data.front()) / point_step;
     }
-    // Don't forget to flush what needs to be copied
-    if (points_to_copy)
-    {
-      memcpy(output_ptr, ptr_init, point_step * points_to_copy);
-      output_ptr += point_step * points_to_copy;
-    }
-    output_count = (output_ptr - &filtered->data.front()) / point_step;
+
+    filtered->header = cloud->header;
+    filtered->fields = cloud->fields;
+    filtered->data.resize(output_count * point_step);
+    filtered->height = 1;
+    filtered->width = output_count;
+    filtered->is_bigendian = cloud->is_bigendian;
+    filtered->point_step = point_step;
+    filtered->row_step = output_count;
+
+    if(output_count > 0)
+      point_cloud_common_->addMessage(filtered);
+    else
+      point_cloud_common_->reset();
+
   }
 
-  filtered->header = cloud->header;
-  filtered->fields = cloud->fields;
-  filtered->data.resize(output_count * point_step);
-  filtered->height = 1;
-  filtered->width = output_count;
-  filtered->is_bigendian = cloud->is_bigendian;
-  filtered->point_step = point_step;
-  filtered->row_step = output_count;
 
-  if(output_count > 0)
-    point_cloud_common_->addMessage(filtered);
-  else
+  void PointCloud2Display::update(float wall_dt, float ros_dt)
+  {
+    point_cloud_common_->update(wall_dt, ros_dt);
+  }
+
+  void PointCloud2Display::reset()
+  {
+    MFDClass::reset();
     point_cloud_common_->reset();
-
-}
-
-
-void PointCloud2Display::update(float wall_dt, float ros_dt)
-{
-  point_cloud_common_->update(wall_dt, ros_dt);
-}
-
-void PointCloud2Display::reset()
-{
-  MFDClass::reset();
-  point_cloud_common_->reset();
-}
+  }
 
 }
 
 #include <pluginlib/class_list_macros.hpp>
+#ifdef ROS1
 PLUGINLIB_EXPORT_CLASS(voxelslam_pointcloud2::PointCloud2Display, rviz::Display)
+#else
+PLUGINLIB_EXPORT_CLASS(voxelslam_pointcloud2::PointCloud2Display, rviz_common::Display)
+#endif

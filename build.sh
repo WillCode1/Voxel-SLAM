@@ -37,9 +37,12 @@ fi
 # substitute the files/folders: CMakeList.txt, package.xml(s)
 if [ ${ROS_VERSION} = ${VERSION_ROS1} ]; then
     cp -f VoxelSLAM/package_ROS1.xml VoxelSLAM/package.xml
+    cp -f VoxelSLAMPointCloud2/package_ROS1.xml VoxelSLAMPointCloud2/package.xml
+    cp -f VoxelSLAMPointCloud2/package_ROS1.xml VoxelSLAMPointCloud2/package.xml
 elif [ ${ROS_VERSION} = ${VERSION_ROS2} ]; then
-    touch VoxelSLAMPointCloud2/CATKIN_IGNORE
     cp -f VoxelSLAM/package_ROS2.xml VoxelSLAM/package.xml
+    cp -f VoxelSLAMPointCloud2/plugin_description_ROS1.xml VoxelSLAMPointCloud2/plugin_description.xml
+    cp -f VoxelSLAMPointCloud2/plugin_description_ROS2.xml VoxelSLAMPointCloud2/plugin_description.xml
 fi
 
 # build
