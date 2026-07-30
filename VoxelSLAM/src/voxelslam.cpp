@@ -417,12 +417,9 @@ public:
     node->get_parameter("extrinsic_rota", vecR);
     node->get_parameter("is_save_map", is_save_map);
 
-    auto imu_qos = rclcpp::QoS(rclcpp::KeepLast(20000));
-    imu_qos.reliable();
-    imu_qos.durability_volatile();
     auto qos = rclcpp::SensorDataQoS();
 
-    sub_imu = node->create_subscription<sensor_msgs::msg::Imu>(imu_topic, imu_qos, imu_handler);
+    sub_imu = node->create_subscription<sensor_msgs::msg::Imu>(imu_topic, 200000, imu_handler);
     if (feat.lidar_type == LIVOX)
       sub_pcl1 = node->create_subscription<livox_ros_driver2::msg::CustomMsg>(lid_topic, qos, livox_pcl_cbk);
     else
