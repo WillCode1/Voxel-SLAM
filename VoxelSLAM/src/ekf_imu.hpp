@@ -110,7 +110,7 @@ public:
 #else
       dt = to_seconds(tail.header.stamp) - cur_time;
       if (dt > 0.05)
-        printf("warning: imu dt error, = %f\n", dt);
+        printf("\033[32;43mwarning: imu dt error, = %f\033[0m\n", dt);
 #endif
 
       double offt = cur_time - pcl_beg_time;
