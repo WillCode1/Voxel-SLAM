@@ -55,6 +55,7 @@ Loop:
   acsize: 2
   mgsize: 2
   isHighFly: 0
+  loop_search_radius: 5
 
 GBA:
   # GBA use the coarse-to-fine strategy

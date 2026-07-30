@@ -48,6 +48,7 @@ Loop:
   acsize: 2
   mgsize: 2
   isHighFly: 0
+  loop_search_radius: 5
 
 GBA:
   voxel_size: 2

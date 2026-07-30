@@ -45,6 +45,7 @@ Loop:
   jud_default: 0.45
   icp_eigval: 9
   ratio_drift: 0.01
+  loop_search_radius: 5
 
 GBA:
   voxel_size: 2

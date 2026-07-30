@@ -352,6 +352,7 @@ public:
   vector<string> sessionNames;
   string bagname, savepath;
   int is_save_map;
+  Eigen::Vector3d preset_gravity;
 
 #ifdef ROS1
   VOXEL_SLAM(ros::NodeHandle &n)
@@ -360,7 +361,7 @@ public:
 #endif
   {
     double cov_gyr, cov_acc, rand_walk_gyr, rand_walk_acc;
-    vector<double> vecR(9), vecT(3);
+    vector<double> vecR(9), vecT(3), gravity_init(3);
     scanPoses = new vector<ScanPose *>();
     keyframes = new vector<Keyframe *>();
 
@@ -375,6 +376,7 @@ public:
     n.param<int>("General/point_filter_num", feat.point_filter_num, 3);
     n.param<vector<double>>("General/extrinsic_tran", vecT, vector<double>());
     n.param<vector<double>>("General/extrinsic_rota", vecR, vector<double>());
+    n.param<vector<double>>("General/gravity_init", gravity_init, vector<double>());
     n.param<int>("General/is_save_map", is_save_map, 0);
 
     sub_imu = n.subscribe(imu_topic, 80000, imu_handler);
@@ -404,6 +406,7 @@ public:
     node->declare_parameter("point_filter_num", 3);
     node->declare_parameter("extrinsic_tran", vector<double>());
     node->declare_parameter("extrinsic_rota", vector<double>());
+    node->declare_parameter("gravity_init", vector<double>());
     node->declare_parameter("is_save_map", 0);
 
     node->get_parameter("lid_topic", lid_topic);
@@ -415,6 +418,7 @@ public:
     node->get_parameter("point_filter_num", feat.point_filter_num);
     node->get_parameter("extrinsic_tran", vecT);
     node->get_parameter("extrinsic_rota", vecR);
+    node->get_parameter("gravity_init", gravity_init);
     node->get_parameter("is_save_map", is_save_map);
 
     auto qos = rclcpp::SensorDataQoS();
@@ -462,6 +466,7 @@ public:
     odom_ekf.Lid_rot_to_IMU << vecR[0], vecR[1], vecR[2],
         vecR[3], vecR[4], vecR[5],
         vecR[6], vecR[7], vecR[8];
+    preset_gravity << gravity_init[0], gravity_init[1], gravity_init[2];
     extrin_para.R = odom_ekf.Lid_rot_to_IMU;
     extrin_para.p = odom_ekf.Lid_offset_to_IMU;
     min_point << 5, 5, 5, 5;
@@ -1026,7 +1031,6 @@ public:
     if (!gravity_align)
     {
       // 1.gravity aligns the imu direction
-      Eigen::Vector3d preset_gravity = Eigen::Vector3d(0, 0, -9.81);
       get_imu_init_rot(preset_gravity, x_curr.g, x_curr.R);
       // 2.fix gravity vec
       x_curr.g = x_curr.R * x_curr.g;
@@ -1658,7 +1662,7 @@ public:
     PGO_Edges lp_edges;
 
     double jud_default = 0.45, icp_eigval = 14;
-    double ratio_drift = 0.05;
+    double ratio_drift = 0.05, loop_search_radius = 5.0;
     int curr_halt = 10, prev_halt = 30;
     int isHighFly = 0;
 #ifdef ROS1
@@ -1668,6 +1672,7 @@ public:
     n.param<int>("Loop/curr_halt", curr_halt, 10);
     n.param<int>("Loop/prev_halt", prev_halt, 30);
     n.param<int>("Loop/isHighFly", isHighFly, 0);
+    n.param<double>("Loop/search_radius", loop_search_radius, 5.0);
 #else
     node->declare_parameter("loop_jud_default", 0.45);
     node->declare_parameter("loop_icp_eigval", 14.0);
@@ -1675,12 +1680,14 @@ public:
     node->declare_parameter("loop_curr_halt", 10);
     node->declare_parameter("loop_prev_halt", 30);
     node->declare_parameter("loop_isHighFly", 0);
+    node->declare_parameter("loop_search_radius", 5.0);
     node->get_parameter("loop_jud_default", jud_default);
     node->get_parameter("loop_icp_eigval", icp_eigval);
     node->get_parameter("loop_ratio_drift", ratio_drift);
     node->get_parameter("loop_curr_halt", curr_halt);
     node->get_parameter("loop_prev_halt", prev_halt);
     node->get_parameter("loop_isHighFly", isHighFly);
+    node->get_parameter("loop_search_radius", loop_search_radius);
 #endif
     ConfigSetting config_setting;
     read_parameters(config_setting, isHighFly);
@@ -1899,7 +1906,7 @@ public:
               double span = smp->jour - keyframes->at(search_result.first)->jour;
               printf("drift: %lf %lf %lf\n", drift_p, dis_p, span);
 
-              if (drift_p / span < ratio_drift && dis_p < 5)
+              if (drift_p / span < ratio_drift && dis_p < loop_search_radius)
               {
                 isPush = true;
                 step = stepsizes.size() - 2;
