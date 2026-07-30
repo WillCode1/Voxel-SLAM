@@ -109,6 +109,8 @@ public:
       dt = tail.header.stamp.toSec() - cur_time;
 #else
       dt = to_seconds(tail.header.stamp) - cur_time;
+      if (dt > 0.05)
+        printf("warning: imu dt error, = %f\n", dt);
 #endif
 
       double offt = cur_time - pcl_beg_time;
