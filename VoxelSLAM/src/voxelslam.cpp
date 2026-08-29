@@ -255,7 +255,7 @@ public:
 
     x_curr = x_buf[win_size - 1];
     double gnm = x_curr.g.norm();
-    if (is_degrade || gnm < 9.6 || gnm > 10.0)
+    if (is_degrade || gnm < 9.6 || gnm > 10.0 || fabs(x_curr.g[0]) > 0.1 || fabs(x_curr.g[1]) > 0.1)
     {
       converge_flag = 0;
     }

@@ -337,7 +337,10 @@ public:
       added_pt.y = pl_orig.points[i].y;
       added_pt.z = pl_orig.points[i].z;
       added_pt.intensity = pl_orig.points[i].intensity;
-      added_pt.curvature = (pl_orig.points[i].timestamp - time_head);
+      added_pt.curvature = (pl_orig.points[i].time - time_head);        // s
+      // added_pt.curvature = (pl_orig.points[i].time - time_head) * 1e-3; // ms
+      // added_pt.curvature = (pl_orig.points[i].time - time_head) * 1e-6; // us
+      // added_pt.curvature = (pl_orig.points[i].time - time_head) * 1e-9; // ns
 
       if (i % point_filter_num == 0)
       {

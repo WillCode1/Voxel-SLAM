@@ -252,7 +252,8 @@ public:
     if(!init_flag)
     {
       IMU_init(imus);
-      if(mean_acc.norm() < 2 && imu_topic == "/livox/imu")
+      // if(mean_acc.norm() < 2 && imu_topic == "/livox/imu")
+      if(mean_acc.norm() < 2)
         scale_gravity = G_m_s2;
       printf("scale_gravity: %lf %lf %d\n", scale_gravity, mean_acc.norm(), init_num);
       x_curr.g = -mean_acc * scale_gravity;
