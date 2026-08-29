@@ -1060,7 +1060,10 @@ public:
     double downkd = down_size >= 0.5 ? down_size : 0.5;
     down_sampling_voxel(*pcl_curr, downkd);
     var_init(extrin_para, *pcl_curr, pptr, dept_err, beam_err);
-    lio_state_estimation_kdtree(pptr);
+    if (motion_init_en)
+      lio_state_estimation_kdtree(pptr);
+    else
+      lio_state_estimation(pptr);
 
     pwld.clear();
     pvec_update(pptr, x_curr, pwld);
