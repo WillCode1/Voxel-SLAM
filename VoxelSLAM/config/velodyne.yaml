@@ -11,6 +11,9 @@ General:
   extrinsic_rota: [1, 0, 0, 
                    0, 1, 0, 
                    0, 0, 1]
+  motion_init_en: false
+  gravity_align_en: true
+  gravity_init: [0., 0., -9.81]
   is_save_map: 0
 
 Odometry:

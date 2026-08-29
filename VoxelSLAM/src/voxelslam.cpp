@@ -353,6 +353,8 @@ public:
   vector<string> sessionNames;
   string bagname, savepath;
   int is_save_map;
+  bool motion_init_en = false;
+  bool gravity_align_en = true;
   Eigen::Vector3d preset_gravity;
 
 #ifdef ROS1
@@ -377,6 +379,8 @@ public:
     n.param<int>("General/point_filter_num", feat.point_filter_num, 3);
     n.param<vector<double>>("General/extrinsic_tran", vecT, vector<double>());
     n.param<vector<double>>("General/extrinsic_rota", vecR, vector<double>());
+    n.param<bool>("General/motion_init_en", motion_init_en, false);
+    n.param<bool>("General/gravity_align_en", gravity_align_en, true);
     n.param<vector<double>>("General/gravity_init", gravity_init, vector<double>());
     n.param<int>("General/is_save_map", is_save_map, 0);
 
@@ -408,6 +412,8 @@ public:
     node->declare_parameter("point_filter_num", 3);
     node->declare_parameter("extrinsic_tran", vector<double>());
     node->declare_parameter("extrinsic_rota", vector<double>());
+    node->declare_parameter("motion_init_en", false);
+    node->declare_parameter("gravity_align_en", true);
     node->declare_parameter("gravity_init", vector<double>());
     node->declare_parameter("is_save_map", 0);
 
@@ -420,6 +426,8 @@ public:
     node->get_parameter("point_filter_num", feat.point_filter_num);
     node->get_parameter("extrinsic_tran", vecT);
     node->get_parameter("extrinsic_rota", vecR);
+    node->get_parameter("motion_init_en", motion_init_en);
+    node->get_parameter("gravity_align_en", gravity_align_en);
     node->get_parameter("gravity_init", gravity_init);
     node->get_parameter("is_save_map", is_save_map);
 
@@ -1032,7 +1040,7 @@ public:
       return 0;
 
     static bool gravity_align = false;
-    if (!gravity_align)
+    if (gravity_align_en && !gravity_align)
     {
       // 1.gravity aligns the imu direction
       get_imu_init_rot(preset_gravity, x_curr.g, x_curr.R);
@@ -1086,10 +1094,13 @@ public:
     int is_success = 0;
     if (win_count >= win_size)
     {
-      is_success = Initialization::instance().motion_init(pl_origs, vec_imus, beg_times, &hess, voxhess, x_buf, surf_map, surf_map_slide, pvec_buf, win_size, sws, x_curr, imu_pre_buf, extrin_para, degrade_eigval);
+      if (motion_init_en)
+      {
+        is_success = Initialization::instance().motion_init(pl_origs, vec_imus, beg_times, &hess, voxhess, x_buf, surf_map, surf_map_slide, pvec_buf, win_size, sws, x_curr, imu_pre_buf, extrin_para, degrade_eigval);
 
-      if (is_success == 0)
-        return -1;
+        if (is_success == 0)
+          return -1;
+      }
       return 1;
     }
     return 0;
