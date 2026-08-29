@@ -26,6 +26,7 @@ Odometry:
   # voxel_size: 4
   voxel_size: 1
   min_eigen_value: 0.0025
+  degrade_eigval: 14
   degrade_bound: 10
   point_notime: 0
 

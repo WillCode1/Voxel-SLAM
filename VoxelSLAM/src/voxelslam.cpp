@@ -132,9 +132,9 @@ public:
   }
 
 #ifdef ROS1
-  int motion_init(vector<pcl::PointCloud<PointType>::Ptr> &pl_origs, vector<deque<sensor_msgs::Imu::Ptr>> &vec_imus, vector<double> &beg_times, Eigen::MatrixXd *hess, LidarFactor &voxhess, vector<IMUST> &x_buf, unordered_map<VOXEL_LOC, OctoTree *> &surf_map, unordered_map<VOXEL_LOC, OctoTree *> &surf_map_slide, vector<PVecPtr> &pvec_buf, int win_size, vector<vector<SlideWindow *>> &sws, IMUST &x_curr, deque<IMU_PRE *> &imu_pre_buf, IMUST &extrin_para)
+  int motion_init(vector<pcl::PointCloud<PointType>::Ptr> &pl_origs, vector<deque<sensor_msgs::Imu::Ptr>> &vec_imus, vector<double> &beg_times, Eigen::MatrixXd *hess, LidarFactor &voxhess, vector<IMUST> &x_buf, unordered_map<VOXEL_LOC, OctoTree *> &surf_map, unordered_map<VOXEL_LOC, OctoTree *> &surf_map_slide, vector<PVecPtr> &pvec_buf, int win_size, vector<vector<SlideWindow *>> &sws, IMUST &x_curr, deque<IMU_PRE *> &imu_pre_buf, IMUST &extrin_para, double degrade_eigval)
 #else
-  int motion_init(vector<pcl::PointCloud<PointType>::Ptr> &pl_origs, vector<deque<sensor_msgs::msg::Imu::SharedPtr>> &vec_imus, vector<double> &beg_times, Eigen::MatrixXd *hess, LidarFactor &voxhess, vector<IMUST> &x_buf, unordered_map<VOXEL_LOC, OctoTree *> &surf_map, unordered_map<VOXEL_LOC, OctoTree *> &surf_map_slide, vector<PVecPtr> &pvec_buf, int win_size, vector<vector<SlideWindow *>> &sws, IMUST &x_curr, deque<IMU_PRE *> &imu_pre_buf, IMUST &extrin_para)
+  int motion_init(vector<pcl::PointCloud<PointType>::Ptr> &pl_origs, vector<deque<sensor_msgs::msg::Imu::SharedPtr>> &vec_imus, vector<double> &beg_times, Eigen::MatrixXd *hess, LidarFactor &voxhess, vector<IMUST> &x_buf, unordered_map<VOXEL_LOC, OctoTree *> &surf_map, unordered_map<VOXEL_LOC, OctoTree *> &surf_map_slide, vector<PVecPtr> &pvec_buf, int win_size, vector<vector<SlideWindow *>> &sws, IMUST &x_curr, deque<IMU_PRE *> &imu_pre_buf, IMUST &extrin_para, double degrade_eigval)
 #endif
   {
     PLV(3) pwld;
@@ -239,7 +239,7 @@ public:
         }
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> saes(nnt);
         eigvalue = saes.eigenvalues();
-        is_degrade = eigvalue[0] < 15 ? true : false;
+        is_degrade = eigvalue[0] < degrade_eigval ? true : false;
 
         converge_thre = 0.01;
         if (converge_flag == 0)
@@ -338,6 +338,7 @@ public:
   int reset_flag = 0;
   int g_update = 0; // gravity update flag: 0 = not update, 1 = update in motion_init, 2 = update after loop closure
   int thread_num = 5;
+  double degrade_eigval = 14;
   int degrade_bound = 10;
 
   vector<vector<ScanPose *> *> multimap_scanPoses;
@@ -394,6 +395,7 @@ public:
     n.param<double>("Odometry/beam_err", beam_err, 0.05);
     n.param<double>("Odometry/voxel_size", voxel_size, 1);
     n.param<double>("Odometry/min_eigen_value", min_eigen_value, 0.0025);
+    n.param<double>("Odometry/degrade_eigval", degrade_eigval, 14);
     n.param<int>("Odometry/degrade_bound", degrade_bound, 10);
     n.param<int>("Odometry/point_notime", point_notime, 0);
 #else
@@ -439,6 +441,7 @@ public:
     node->declare_parameter("odom_beam_err", 0.05);
     node->declare_parameter("odom_voxel_size", 1.0);
     node->declare_parameter("odom_min_eigen_value", 0.0025);
+    node->declare_parameter("odom_degrade_eigval", 14.);
     node->declare_parameter("odom_degrade_bound", 10);
     node->declare_parameter("odom_point_notime", 0);
 
@@ -451,6 +454,7 @@ public:
     node->get_parameter("odom_beam_err", beam_err);
     node->get_parameter("odom_voxel_size", voxel_size);
     node->get_parameter("odom_min_eigen_value", min_eigen_value);
+    node->get_parameter("odom_degrade_eigval", degrade_eigval);
     node->get_parameter("odom_degrade_bound", degrade_bound);
     node->get_parameter("odom_point_notime", point_notime);
 #endif
@@ -641,7 +645,7 @@ public:
     Eigen::Vector3d evalue = saes.eigenvalues();
     // printf("eva %d: %lf\n", match_num, evalue[0]);
 
-    if (evalue[0] < 14)
+    if (evalue[0] < degrade_eigval)
       return false;
     else
       return true;
@@ -1082,7 +1086,7 @@ public:
     int is_success = 0;
     if (win_count >= win_size)
     {
-      is_success = Initialization::instance().motion_init(pl_origs, vec_imus, beg_times, &hess, voxhess, x_buf, surf_map, surf_map_slide, pvec_buf, win_size, sws, x_curr, imu_pre_buf, extrin_para);
+      is_success = Initialization::instance().motion_init(pl_origs, vec_imus, beg_times, &hess, voxhess, x_buf, surf_map, surf_map_slide, pvec_buf, win_size, sws, x_curr, imu_pre_buf, extrin_para, degrade_eigval);
 
       if (is_success == 0)
         return -1;

@@ -29,6 +29,7 @@ voxel_slam:
         # voxel_size: 4
         odom_voxel_size: 1.0
         odom_min_eigen_value: 0.0025
+        odom_degrade_eigval: 2.
         odom_degrade_bound: 10
         odom_point_notime: 0
 
